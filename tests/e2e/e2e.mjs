@@ -183,6 +183,80 @@ const r0=row();const sr=await call(p,10,{revision:de.elements[10].revision,value
 const diff=Object.keys(r1).filter(c=>r0[c]!==r1[c]&&!['tstamp','text'].includes(c));
 ok('save changes only the sent field',sr.s==200&&diff.length==0,sr.s+' '+diff.join());
 }
+// Help for editors
+await p.goto(B+'/contao/block-editor?id=2');
+await p.locator('.cbe-help').waitFor();ok('help shown without selection',await p.locator('#cbe-inspector .cbe-help dt').count()>=5);
+await p.frameLocator('#cbe-frame').locator('[data-be-id="10"]').waitFor();await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument.documentElement.classList.contains('cbe-ready'));
+const hb0=await p.frameLocator('#cbe-frame').locator('[data-be-id="10"] .rte').boundingBox();await p.mouse.click(hb0.x+20,hb0.y+8);await p.waitForTimeout(200);
+ok('help hidden with selection',await p.locator('.cbe-help').count()==0);
+await p.keyboard.press('Escape');await p.waitForTimeout(200);ok('help back after deselecting',await p.locator('.cbe-help').count()==1);
+// Moving elements
+{
+await p.goto(B+'/contao/block-editor?id=2');
+const fm=p.frameLocator('#cbe-frame');await fm.locator('[data-be-id="10"]').waitFor();
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument.documentElement.classList.contains('cbe-ready'));
+const fo=p.frames().find(f=>f.url().includes('_block_editor'));
+const order=()=>fo.evaluate(()=>[...document.querySelectorAll('[data-be-id]')].map(e=>+e.dataset.beId));
+const at=await p.locator('#cbe-app').getAttribute('data-token');
+const mv=(pg,id,body,h={'X-Block-Editor-Token':at})=>pg.evaluate(async([id,body,h])=>{const r=await fetch(`/contao/block-editor/api/elements/${id}/position`,{method:'PATCH',headers:{'Content-Type':'application/json',...h},body:JSON.stringify(body)});return{s:r.status,b:await r.text()}},[id,body,h]);
+const rev=async(pg,id)=>(await pg.evaluate(async id=>(await fetch('/contao/block-editor/api/elements?ids='+id)).json(),id)).elements[id]?.revision;
+const moved=()=>p.waitForResponse(x=>x.url().endsWith('/position'));
+// drag with the handle
+await fm.locator('[data-be-id="10"]').hover();
+const hb=await fm.locator('.cbe-handle').boundingBox();ok('handle shown',!!hb);
+const t=await fm.locator('[data-be-id="11"]').boundingBox();
+let w=moved();
+await p.mouse.move(hb.x+13,hb.y+13);await p.mouse.down();await p.mouse.move(t.x+40,t.y+t.height/2+1,{steps:4});await p.mouse.move(t.x+40,t.y+t.height-1,{steps:4});await p.mouse.up();
+let rm=await w;const o1=await order();
+ok('drag: request ok',rm.status()==200,rm.status());
+ok('drag: order in page',o1.indexOf(10)==o1.indexOf(11)+1,o1.join());
+await p.waitForTimeout(200);await p.reload();await fm.locator('[data-be-id="10"]').waitFor();
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument.documentElement.classList.contains('cbe-ready'));
+const fo2=p.frames().find(f=>f.url().includes('_block_editor'));const order2=()=>fo2.evaluate(()=>[...document.querySelectorAll('[data-be-id]')].map(e=>+e.dataset.beId));
+const o2=await order2();ok('drag: persisted after reload',o2.join()==o1.join(),o2.join());
+// keyboard
+await fm.locator('[data-be-id="10"]').focus();w=moved();await p.keyboard.press('Alt+ArrowUp');rm=await w;const o3=await order2();
+ok('keyboard: moved up',rm.status()==200&&o3.indexOf(10)==o3.indexOf(11)-1,o3.join());
+ok('keyboard: focus kept',await fo2.evaluate(()=>document.activeElement?.dataset.beId)=='10');
+await p.waitForTimeout(100);
+// failed move puts it back
+await p.route('**/position',r=>r.fulfill({status:409,contentType:'application/json',body:'{"error":"Konflikt"}'}));
+await p.keyboard.press('Alt+ArrowDown');await p.waitForTimeout(300);await p.unroute('**/position');
+ok('failed move: restored',(await order2()).join()==o3.join(),(await order2()).join());
+ok('failed move: message',(await p.locator('#cbe-status').innerText())=='Konflikt');
+// editing after a move still has a valid revision
+const bx=await fm.locator('[data-be-id="10"] .rte').boundingBox();await p.mouse.click(bx.x+20,bx.y+8);await fm.locator('.ProseMirror').waitFor();await p.keyboard.type('M');
+const se=await p.waitForResponse(x=>x.url().endsWith('/api/elements/10')&&x.request().method()=='PATCH');ok('save after move',se.status()==200,se.status());
+await p.keyboard.press('Escape');await p.waitForTimeout(800);
+// API checks
+let m=await mv(p,10,{revision:await rev(p,10),target:11,position:'inside'});ok('move: bad position → 400',m.s==400,m.s);
+m=await mv(p,10,{revision:await rev(p,10),target:'11',position:'after'});ok('move: bad target → 400',m.s==400,m.s);
+m=await mv(p,10,{revision:await rev(p,10),target:10,position:'after'});ok('move: onto itself → 422',m.s==422,m.s);
+m=await mv(p,10,{revision:'x',target:12,position:'after'});ok('move: old revision → 409',m.s==409,m.s);
+m=await mv(p,10,{revision:await rev(p,10),target:999999,position:'after'});ok('move: unknown target → 404',m.s==404,m.s);
+m=await mv(p,10,{revision:await rev(p,10),target:12,position:'after'},{});ok('move: no token → 403',m.s==403,m.s);
+m=await mv(p,10,{revision:await rev(p,10),target:20,position:'after'});ok('move: other article ok',m.s==200,m.s+m.b.slice(0,120));
+m=await mv(p,10,{revision:await rev(p,10),target:12,position:'before'});ok('move: and back',m.s==200,m.s);
+// editor without access to the other page
+const eh={'X-Block-Editor-Token':await e.pg.locator('#cbe-app').getAttribute('data-token')};
+m=await mv(e.pg,10,{revision:await rev(e.pg,10),target:20,position:'after'},eh);ok('editor: move to foreign page → 404',m.s==404,m.s);
+m=await mv(e.pg,20,{revision:'x',target:10,position:'after'},eh);ok('editor: move foreign element → 404',m.s==404,m.s);
+m=await mv(e.pg,10,{revision:await rev(e.pg,10),target:12,position:'after'},eh);ok('editor: move on own page ok',m.s==200,m.s);
+if(process.env.E2E_DB_CONTAINER){
+const q=x=>execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-N','-e',x]).toString().trim();
+// no gap left: all siblings get new numbers and report their revisions
+q('UPDATE tl_content SET sorting=id-9 WHERE pid=1');
+m=await mv(p,12,{revision:await rev(p,12),target:10,position:'before'});const j=JSON.parse(m.b);
+ok('renumber: revisions of siblings',m.s==200&&Object.keys(j.revisions).length>2,m.s+' '+Object.keys(j.revisions||{}).join());
+ok('renumber: order',q("SELECT GROUP_CONCAT(id ORDER BY sorting) FROM tl_content WHERE pid=1 AND id IN (10,11,12)").startsWith('12,10'));
+const before=q('SELECT sorting,tstamp FROM tl_content WHERE id=12');
+m=await mv(p,12,{revision:await rev(p,12),target:10,position:'before'});ok('no-op move changes nothing',m.s==200&&q('SELECT sorting,tstamp FROM tl_content WHERE id=12')==before,m.s);
+// an element can't end up inside of itself
+q(`INSERT INTO tl_content (id,pid,ptable,sorting,tstamp,type,headline,cssID) VALUES (30,1,'tl_article',9000,1,'element_group','',''),(31,30,'tl_content',128,1,'headline','a:2:{s:5:"value";s:1:"x";s:4:"unit";s:2:"h2";}','')`);
+m=await mv(p,30,{revision:await rev(p,30),target:31,position:'after'});ok('move into itself → 422',m.s==422,m.s+m.b.slice(0,120));
+q('DELETE FROM tl_content WHERE id IN (30,31)');
+}
+}
 console.log('browser errors:',pageErrors);
 await browser.close();
 const f=results.filter(r=>!r[0]).length;console.log(`\n${results.length-f}/${results.length} passed`);

@@ -87,9 +87,15 @@ body {
 .cbe-inspector {
   background: var(--cbe-panel);
   border-left: 1px solid var(--cbe-border);
+  display: flex;
+  flex-direction: column;
   overflow-y: auto;
   padding: 16px;
   width: 320px;
+}
+
+.cbe-inspector > * {
+  flex-shrink: 0;
 }
 
 .cbe-inspector h2 {
@@ -161,4 +167,44 @@ body {
     max-height: 45%;
     width: 100%;
   }
+}
+
+.cbe-help {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--cbe-border);
+  color: var(--cbe-muted);
+  font-size: 13px;
+}
+
+.cbe-help h2 {
+  margin: 0 0 8px;
+  color: var(--cbe-text);
+  font-size: 14px;
+}
+
+.cbe-help dl {
+  margin: 0;
+}
+
+.cbe-help dt {
+  margin-top: 10px;
+  color: var(--cbe-text);
+  font-weight: 600;
+}
+
+.cbe-help dd {
+  margin: 2px 0 0;
+}
+
+.cbe-help kbd,
+.cbe-help code {
+  padding: 0 4px;
+  border: 1px solid var(--cbe-border);
+  border-radius: 3px;
+  font: 12px ui-monospace, monospace;
+}
+
+.cbe-help-handle {
+  color: var(--cbe-accent);
 }

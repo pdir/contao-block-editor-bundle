@@ -13,19 +13,23 @@ export interface FrameElement {
   values: Record<string, unknown>;
 }
 
+export type MovePosition = 'before' | 'after';
+
 export type ToFrame =
   | { type: 'cbe:hello' }
   | { type: 'cbe:end' }
   | { type: 'cbe:elements'; elements: FrameElement[] }
   | { type: 'cbe:value'; id: number; field: string; value: unknown }
   | { type: 'cbe:refresh'; id: number }
-  | { type: 'cbe:revert'; id: number; field: string; value: unknown };
+  | { type: 'cbe:revert'; id: number; field: string; value: unknown }
+  | { type: 'cbe:moved'; id: number; ok: boolean };
 
 export type ToShell =
   | { type: 'cbe:ready'; ids: number[] }
   | { type: 'cbe:select'; id: number | null }
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
-  | { type: 'cbe:commit'; id: number; render: boolean };
+  | { type: 'cbe:commit'; id: number; render: boolean }
+  | { type: 'cbe:move'; id: number; target: number; position: MovePosition };
 
 const PREFIX = 'cbe:';
 

@@ -1,4 +1,4 @@
-import type { FrameElement, InlineConfig, ToFrame, ToShell } from './protocol';
+import type { FrameElement, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 
@@ -77,7 +77,12 @@ async function getJson<T>(url: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/** Saves wait for a running move, because it can change the revision of any sibling. */
+let moving: Promise<void> = Promise.resolve();
+
 const send = async (id: number, revision: string, values: Record<string, unknown>, keepalive: boolean): Promise<SaveResult> => {
+  await moving;
+
   const response = await fetch(`${api}/${id}`, {
     method: 'PATCH',
     keepalive,
@@ -157,6 +162,26 @@ const queue = new SaveQueue(send, {
     }
   },
 });
+
+async function moveElement(id: number, target: number, position: MovePosition): Promise<void> {
+  await queue.settle();
+
+  const response = await fetch(`${api}/${id}/position`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Block-Editor-Token': token },
+    body: JSON.stringify({ revision: queue.revision(id), target, position }),
+  });
+
+  const data = (await response.json().catch(() => ({}))) as { error?: string; revisions?: Record<string, string> };
+
+  if (!response.ok) {
+    throw new Error(data.error ?? 'Verschieben fehlgeschlagen.');
+  }
+
+  for (const [element, revision] of Object.entries(data.revisions ?? {})) {
+    queue.setRevision(Number(element), revision);
+  }
+}
 
 async function loadElements(ids: number[]): Promise<void> {
   if (ids.length === 0) {
@@ -347,10 +372,11 @@ function renderInspector(): void {
   const element = selected === null ? undefined : elements.get(selected);
 
   if (!element) {
-    const hint = document.createElement('p');
-    hint.className = 'cbe-hint';
-    hint.textContent = 'Klicke auf ein Element, um es zu bearbeiten.';
-    inspector.append(hint);
+    const help = document.querySelector<HTMLTemplateElement>('#cbe-help');
+
+    if (help) {
+      inspector.append(help.content.cloneNode(true));
+    }
 
     return;
   }
@@ -401,6 +427,22 @@ window.addEventListener('message', (event) => {
         queue.change(message.id, message.field, message.value);
       }
       break;
+    case 'cbe:move': {
+      const { id, target, position } = message;
+
+      setStatus('Wird verschoben …');
+
+      moving = moveElement(id, target, position)
+        .then(() => {
+          setStatus('Verschoben');
+          post({ type: 'cbe:moved', id, ok: true });
+        })
+        .catch((error: unknown) => {
+          setStatus(error instanceof Error && !(error instanceof TypeError) ? error.message : 'Verschieben fehlgeschlagen. Bitte die Verbindung prüfen.', true);
+          post({ type: 'cbe:moved', id, ok: false });
+        });
+      break;
+    }
     case 'cbe:commit':
       if (message.render) {
         awaitingRender.add(message.id);
@@ -430,3 +472,5 @@ window.addEventListener('beforeunload', (event) => {
     event.preventDefault();
   }
 });
+
+renderInspector();

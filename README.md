@@ -16,10 +16,12 @@ Benutzerrechte und Elemente anderer Erweiterungen funktionieren wie gewohnt.
 
 ## Stand
 
-Umgesetzt ist der erste MVP-Schritt: Inline-Text (Elemente `text` und `headline`), Inspector aus dem DCA und
-Autosave mit Versionierung. Der Editor öffnet sich im Backend über die Operation „Im Block-Editor öffnen“ im Seitenbaum.
+Umgesetzt sind Inline-Text (Elemente `text` und `headline`), Inspector aus dem DCA, Autosave mit Versionierung und das
+Verschieben von Elementen, auch zwischen Artikeln und Spalten: per Griff links neben dem Element oder mit Alt + Pfeil
+hoch/runter, wenn das Element den Fokus hat. Ziel ist immer ein bearbeitbares Element, leere Artikel sind noch kein
+Ablageziel. Der Editor öffnet sich im Backend über die Operation „Im Block-Editor öffnen“ im Seitenbaum.
 
-Noch offen: Drag & Drop, Inserter, Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
+Noch offen: Inserter, Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
 Responsive-Vorschau und die Erweiterungs-API. Felder, die der Editor noch nicht unterstützt, bleiben über den Link
 „Im klassischen Backend bearbeiten“ erreichbar.
 

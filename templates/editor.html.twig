@@ -27,6 +27,26 @@
                 <aside id="cbe-inspector" class="cbe-inspector" aria-label="Eigenschaften des Elements">
                     <p class="cbe-hint">Klicke auf ein Element, um es zu bearbeiten.</p>
                 </aside>
+                <template id="cbe-help">
+                    <p class="cbe-hint">Klicke auf ein Element, um es zu bearbeiten.</p>
+                    <section class="cbe-help" aria-labelledby="cbe-help-title">
+                        <h2 id="cbe-help-title">So funktioniert der Editor</h2>
+                        <dl>
+                            <dt>Text bearbeiten</dt>
+                            <dd>Klicke in einen Text oder eine Überschrift und tippe los. Mit <kbd>Esc</kbd> oder einem Klick daneben beendest du die Bearbeitung.</dd>
+                            <dt>Eigenschaften ändern</dt>
+                            <dd>Nach dem Klick auf ein Element stehen seine Einstellungen hier in der Seitenleiste.</dd>
+                            <dt>Verschieben</dt>
+                            <dd>Ziehe ein Element am Griff <span class="cbe-help-handle" aria-hidden="true">⠿</span>, der beim Überfahren erscheint. Oder setze den Fokus auf das Element und nutze <kbd>Alt</kbd> + <kbd>↑</kbd> oder <kbd>↓</kbd>.</dd>
+                            <dt>Speichern</dt>
+                            <dd>Änderungen werden automatisch gespeichert. Den Stand siehst du oben in der Leiste.</dd>
+                            <dt>Insert-Tags</dt>
+                            <dd>Beim Bearbeiten siehst du den Tag, zum Beispiel <code>{{ '{{email::…}}' }}</code>. Danach erscheint wieder das Ergebnis.</dd>
+                            <dt>Klassisches Backend</dt>
+                            <dd>Was hier noch nicht geht, erreichst du über den Link „Im klassischen Backend bearbeiten“ beim ausgewählten Element.</dd>
+                        </dl>
+                    </section>
+                </template>
             </main>
         </div>
     {% else %}

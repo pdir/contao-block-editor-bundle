@@ -31,6 +31,7 @@ interface Entry {
 
 export class SaveQueue {
   private readonly entries = new Map<number, Entry>();
+  private idleWaiters: (() => void)[] = [];
 
   constructor(private readonly send: Send, private readonly events: QueueEvents, private readonly delay = 600) {}
 
@@ -59,6 +60,28 @@ export class SaveQueue {
       }
 
       void this.run(id, entry, keepalive);
+    }
+  }
+
+  revision(id: number): string | undefined {
+    return this.entries.get(id)?.revision;
+  }
+
+  /** Takes over a revision that changed outside of the queue. */
+  setRevision(id: number, revision: string): void {
+    const entry = this.entries.get(id);
+
+    if (entry) {
+      entry.revision = revision;
+    }
+  }
+
+  /** Saves everything and resolves once nothing is pending anymore. */
+  async settle(): Promise<void> {
+    this.flush();
+
+    if (this.pending) {
+      await new Promise<void>((resolve) => this.idleWaiters.push(resolve));
     }
   }
 
@@ -103,5 +126,9 @@ export class SaveQueue {
     }
 
     this.events.onStateChange(this.pending);
+
+    if (!this.pending) {
+      this.idleWaiters.splice(0).forEach((resolve) => resolve());
+    }
   }
 }

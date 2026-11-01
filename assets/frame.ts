@@ -1,12 +1,13 @@
 import { Editor } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import StarterKit from '@tiptap/starter-kit';
-import type { FrameElement, InlineConfig, ToFrame, ToShell } from './protocol';
+import type { FrameElement, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
 import { canEditInline, isSafeLink } from './rich-text-policy';
 
 const ID_ATTRIBUTE = 'data-be-id';
 const BUDGET_MS = 50;
+const HANDLE_SPACE = 30;
 
 const known = new Map<number, FrameElement>();
 
@@ -267,10 +268,171 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
   return caretPlaced;
 }
 
+/** Where a moved element came from, to put it back if the server rejects the move. */
+let pendingMove: { root: HTMLElement; parent: ParentNode; next: ChildNode | null; focus: boolean } | null = null;
+
+function requestMove(root: HTMLElement, target: HTMLElement, position: MovePosition, focus: boolean): void {
+  // One at a time: a later move is based on the result of this one
+  if (pendingMove || !root.parentNode) {
+    return;
+  }
+
+  endSession();
+
+  pendingMove = { root, parent: root.parentNode, next: root.nextSibling, focus };
+
+  if (position === 'before') {
+    target.before(root);
+  } else {
+    target.after(root);
+  }
+
+  if (focus) {
+    root.focus();
+  }
+
+  toShell({ type: 'cbe:move', id: Number(root.getAttribute(ID_ATTRIBUTE)), target: Number(target.getAttribute(ID_ATTRIBUTE)), position });
+}
+
+function finishMove(ok: boolean): void {
+  if (pendingMove && !ok) {
+    pendingMove.parent.insertBefore(pendingMove.root, pendingMove.next);
+
+    if (pendingMove.focus) {
+      pendingMove.root.focus();
+    }
+  }
+
+  pendingMove = null;
+}
+
+function editableRoots(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>(`[${ID_ATTRIBUTE}]`)).filter((root) => known.has(Number(root.getAttribute(ID_ATTRIBUTE))));
+}
+
+/** The next element in reading order, skipping its own children and its parents. */
+function neighbour(root: HTMLElement, direction: -1 | 1): HTMLElement | null {
+  const roots = editableRoots().filter((other) => other === root || (!root.contains(other) && !other.contains(root)));
+
+  return roots[roots.indexOf(root) + direction] ?? null;
+}
+
+const handle = document.createElement('button');
+handle.type = 'button';
+handle.className = 'cbe-handle';
+handle.textContent = '⠿';
+handle.title = 'Ziehen zum Verschieben (Tastatur: Alt + Pfeil hoch/runter)';
+handle.draggable = true;
+// Mouse only: the keyboard moves the focused element directly with Alt + arrow keys
+handle.tabIndex = -1;
+handle.setAttribute('aria-hidden', 'true');
+
+const dropLine = document.createElement('div');
+dropLine.className = 'cbe-drop-line';
+dropLine.setAttribute('aria-hidden', 'true');
+
+let handleRoot: HTMLElement | null = null;
+let dragged: HTMLElement | null = null;
+let drop: { target: HTMLElement; position: MovePosition } | null = null;
+
+function placeHandle(): void {
+  if (!handleRoot?.isConnected) {
+    handle.hidden = true;
+    handleRoot = null;
+
+    return;
+  }
+
+  const { left, right, top } = handleRoot.getBoundingClientRect();
+  const fitsBeside = left >= HANDLE_SPACE;
+
+  // Inside of the element it would cover text, which must not happen while typing
+  handle.hidden = !fitsBeside && session?.element.id === Number(handleRoot.getAttribute(ID_ATTRIBUTE));
+  handle.style.left = `${fitsBeside ? left - HANDLE_SPACE : right - HANDLE_SPACE}px`;
+  handle.style.top = `${Math.max(top, 2)}px`;
+}
+
+function hideDropLine(): void {
+  dropLine.hidden = true;
+  drop = null;
+}
+
+document.addEventListener('pointerover', (event) => {
+  const root = closestId(event.target)?.root;
+
+  if (root && !dragged) {
+    handleRoot = root;
+    placeHandle();
+  }
+});
+
+window.addEventListener('scroll', placeHandle, { passive: true, capture: true });
+window.addEventListener('resize', placeHandle, { passive: true });
+
+handle.addEventListener('dragstart', (event) => {
+  if (!handleRoot || !event.dataTransfer || pendingMove) {
+    event.preventDefault();
+
+    return;
+  }
+
+  dragged = handleRoot;
+  endSession();
+  event.dataTransfer.effectAllowed = 'move';
+  // Firefox only starts a drag with data
+  event.dataTransfer.setData('text/plain', '');
+  event.dataTransfer.setDragImage(dragged, 0, 0);
+});
+
+document.addEventListener('dragover', (event) => {
+  const hit = closestId(event.target);
+
+  // Only our own drag: dropped files or text are not handled here
+  if (!dragged || !hit || dragged.contains(hit.root) || hit.root.contains(dragged)) {
+    hideDropLine();
+
+    return;
+  }
+
+  event.preventDefault();
+
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'move';
+  }
+
+  const { left, top, width, height } = hit.root.getBoundingClientRect();
+  const position: MovePosition = event.clientY < top + height / 2 ? 'before' : 'after';
+
+  drop = { target: hit.root, position };
+  dropLine.hidden = false;
+  dropLine.style.left = `${left}px`;
+  dropLine.style.top = `${position === 'before' ? top : top + height}px`;
+  dropLine.style.width = `${width}px`;
+});
+
+document.addEventListener('drop', (event) => {
+  if (dragged && drop) {
+    event.preventDefault();
+    requestMove(dragged, drop.target, drop.position, false);
+  }
+
+  hideDropLine();
+});
+
+document.addEventListener('dragend', () => {
+  dragged = null;
+  hideDropLine();
+  placeHandle();
+});
+
 // One delegated listener instead of one per element. pointerdown fires well before
 // click; no network request or rendering happens on this path.
 document.addEventListener('pointerdown', (event) => {
   if (event.button !== 0 || !known.size) {
+    return;
+  }
+
+  if (event.target === handle) {
     return;
   }
 
@@ -295,6 +457,8 @@ document.addEventListener('pointerdown', (event) => {
     document.addEventListener('mousedown', (mouse) => mouse.preventDefault(), { once: true, capture: true });
   }
 
+  placeHandle();
+
   const { duration } = performance.measure('cbe:click-to-edit', 'cbe:pointerdown');
 
   if (duration > BUDGET_MS) {
@@ -312,6 +476,18 @@ document.addEventListener('click', (event) => {
 document.addEventListener('submit', (event) => event.preventDefault(), true);
 
 document.addEventListener('keydown', (event) => {
+  if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+    const root = closestId(event.target)?.root;
+    const target = root ? neighbour(root, event.key === 'ArrowUp' ? -1 : 1) : null;
+
+    if (root && target) {
+      event.preventDefault();
+      requestMove(root, target, event.key === 'ArrowUp' ? 'before' : 'after', true);
+    }
+
+    return;
+  }
+
   if (event.key === 'Escape') {
     endSession();
     toShell({ type: 'cbe:select', id: null });
@@ -330,6 +506,10 @@ document.addEventListener('keydown', (event) => {
 });
 
 function applyElements(elements: FrameElement[]): void {
+  document.body.append(handle, dropLine);
+  handle.hidden = true;
+  dropLine.hidden = true;
+
   for (const element of elements) {
     known.set(element.id, element);
 
@@ -432,6 +612,10 @@ window.addEventListener('message', (event) => {
       break;
     case 'cbe:refresh':
       void refresh(message.id);
+      break;
+    case 'cbe:moved':
+      finishMove(message.ok);
+      placeHandle();
       break;
   }
 });

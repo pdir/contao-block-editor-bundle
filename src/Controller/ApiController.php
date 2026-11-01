@@ -6,6 +6,7 @@ namespace Pdir\ContaoBlockEditorBundle\Controller;
 
 use Contao\CoreBundle\Exception\AccessDeniedException;
 use Pdir\ContaoBlockEditorBundle\Element\ElementInspector;
+use Pdir\ContaoBlockEditorBundle\Element\ElementMover;
 use Pdir\ContaoBlockEditorBundle\Element\ElementUpdater;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
 use Pdir\ContaoBlockEditorBundle\Security\RequestGuard;
@@ -22,6 +23,7 @@ final class ApiController
         private readonly RequestGuard $guard,
         private readonly ElementInspector $inspector,
         private readonly ElementUpdater $updater,
+        private readonly ElementMover $mover,
     ) {
     }
 
@@ -73,6 +75,24 @@ final class ApiController
             }
 
             return $this->json($this->updater->update($id, $data['revision'], $data['values']));
+        });
+    }
+
+    #[Route('/elements/{id}/position', name: 'pdir_block_editor_api_move', requirements: ['id' => '[1-9]\d{0,9}'], methods: ['PATCH'])]
+    public function move(Request $request, int $id): Response
+    {
+        return $this->handle(function () use ($request, $id): Response {
+            $this->guard->assertCanWrite($request);
+
+            $data = $this->guard->decodeJsonBody($request);
+            $target = $data['target'] ?? null;
+            $position = $data['position'] ?? null;
+
+            if (!\is_string($data['revision'] ?? null) || !\is_int($target) || $target < 1 || !\in_array($position, ElementMover::POSITIONS, true)) {
+                throw new ApiException(400, 'Ungültige Anfrage.');
+            }
+
+            return $this->json($this->mover->move($id, $data['revision'], $target, $position));
         });
     }
 
