@@ -201,8 +201,8 @@ const at=await p.locator('#cbe-app').getAttribute('data-token');
 const mv=(pg,id,body,h={'X-Block-Editor-Token':at})=>pg.evaluate(async([id,body,h])=>{const r=await fetch(`/contao/block-editor/api/elements/${id}/position`,{method:'PATCH',headers:{'Content-Type':'application/json',...h},body:JSON.stringify(body)});return{s:r.status,b:await r.text()}},[id,body,h]);
 const rev=async(pg,id)=>(await pg.evaluate(async id=>(await fetch('/contao/block-editor/api/elements?ids='+id)).json(),id)).elements[id]?.revision;
 const moved=()=>p.waitForResponse(x=>x.url().endsWith('/position'));
-// drag with the handle
-await fm.locator('[data-be-id="10"]').hover();
+// drag with the handle. Firefox only reports a real movement onto the element
+await p.mouse.move(1,1);await fm.locator('[data-be-id="10"]').hover();
 const hb=await fm.locator('.cbe-handle').boundingBox();ok('handle shown',!!hb);
 const t=await fm.locator('[data-be-id="11"]').boundingBox();
 let w=moved();
@@ -256,6 +256,69 @@ q(`INSERT INTO tl_content (id,pid,ptable,sorting,tstamp,type,headline,cssID) VAL
 m=await mv(p,30,{revision:await rev(p,30),target:31,position:'after'});ok('move into itself → 422',m.s==422,m.s+m.b.slice(0,120));
 q('DELETE FROM tl_content WHERE id IN (30,31)');
 }
+}
+await p.goto(B+'/contao/block-editor?id=2');await p.frameLocator('#cbe-frame').locator('[data-be-id="10"]').waitFor();ok('preview toolbar hidden in the frame',await p.frameLocator('#cbe-frame').locator('cto-toolbar').evaluateAll(n=>n.every(x=>getComputedStyle(x).display=='none')));
+if(process.env.E2E_DB_CONTAINER)// links in editable text
+{
+const fl=p.frameLocator('#cbe-frame');
+const bar=fl.locator('.cbe-link-bar');
+const q=x=>execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-N','-e',x]).toString().trim();
+const stored=()=>q('SELECT text FROM tl_content WHERE id=16');
+const ready=async(id=16)=>{await p.goto(B+'/contao/block-editor?id=2');await p.waitForFunction(i=>{const d=document.getElementById('cbe-frame').contentDocument;return d?.documentElement?.classList.contains('cbe-ready')&&d.querySelector(`[data-be-id="${i}"]`)},id,{timeout:10000})};
+const setText=html=>q(`UPDATE tl_content SET text='${html}' WHERE id=16`);
+const link=fl.locator('[data-be-id="16"] a');
+const saved=()=>p.waitForResponse(x=>x.url().includes('/api/elements/16')&&x.request().method()=='PATCH',{timeout:5000});
+setText('<p>Vor <a href="{{link_url::3}}">Geheimnis</a> nach</p>');
+await ready();
+ok('link: insert tag rendered',(await link.getAttribute('href')).includes('geheim'),await link.getAttribute('href'));
+await link.click();await bar.waitFor({timeout:3000});
+ok('link: click shows the bar, no editor',await fl.locator('.ProseMirror').count()==0&&await bar.getByRole('button',{name:'Öffnen'}).count()==1);
+ok('link: shows resolved address',(await bar.textContent()).includes('/geheim.html')&&!(await bar.textContent()).includes('preview.php'),await bar.textContent());
+await p.locator('#cbe-inspector .cbe-field').first().waitFor({timeout:3000});ok('link: element selected',await p.locator('#cbe-inspector .cbe-field').count()>0);
+await p.keyboard.press('Escape');await p.waitForTimeout(100);ok('link: Escape closes',!(await bar.isVisible()));
+await link.click();await bar.getByRole('button',{name:'Öffnen'}).click();
+await fl.locator('[data-be-id="20"]').waitFor({timeout:10000});await p.waitForURL(/id=3/,{timeout:5000}).catch(()=>{});ok('link: open navigates',new URL(p.url()).searchParams.get('id')=='3');
+await ready();await link.click();await bar.getByRole('button',{name:'Bearbeiten'}).click();await fl.locator('[data-be-id="16"] .ProseMirror').waitFor();
+await bar.locator('input').waitFor({timeout:3000});
+ok('link: edit shows the raw tag',await bar.locator('input').inputValue()=='{{link_url::3}}',await bar.locator('input').inputValue());
+ok('link: caret is in the text',await fl.locator('[data-be-id="16"] .ProseMirror').evaluate(n=>n.contains(n.ownerDocument.activeElement)||n===n.ownerDocument.activeElement));
+ok('link: no open for raw tag',await bar.getByRole('button',{name:'Öffnen'}).count()==0);
+await bar.locator('input').fill('javascript:alert(1)');await bar.getByRole('button',{name:'Übernehmen'}).click();
+ok('link: unsafe address refused',(await bar.textContent()).includes('nicht erlaubt')&&(await fl.locator('[data-be-id="16"] .ProseMirror a').getAttribute('href'))=='{{link_url::3}}',await bar.textContent());
+let wait=saved();await bar.locator('input').fill('www.example.com/x');await bar.locator('input').press('Enter');await wait;await p.waitForTimeout(200);
+let s=stored();ok('link: address saved',s.includes('href="https://www.example.com/x"')&&s.includes('>Geheimnis</a>'),s);
+ok('link: no attributes added',!/target=|rel=|class=/.test(s),s);
+wait=saved();await bar.getByRole('button',{name:'Entfernen'}).click();await wait;await p.waitForTimeout(200);
+s=stored();ok('link: removed, text stays',!s.includes('<a')&&s.includes('Geheimnis'),s);ok('link: bar gone after removal',!(await bar.isVisible()));
+await p.keyboard.press('ControlOrMeta+a');await p.keyboard.press('ControlOrMeta+k');await bar.locator('input').waitFor({timeout:3000});
+ok('link: shortcut focuses the address',await bar.locator('input').evaluate(n=>n===n.ownerDocument.activeElement));
+wait=saved();await p.keyboard.type('/geheim.html');await p.keyboard.press('Enter');await wait;await p.waitForTimeout(200);
+s=stored();ok('link: shortcut creates link',s.includes('href="/geheim.html"'),s);
+await bar.locator('input').press('Escape');await p.waitForTimeout(100);
+ok('link: Escape in bar keeps editing',!(await bar.isVisible())&&await fl.locator('[data-be-id="16"] .ProseMirror').count()==1);
+await p.keyboard.press('Escape');
+// attributes survive editing
+setText('<p><a href="/a.html" target="_blank" rel="noopener" title="T">A</a> b</p>');
+await ready();await link.click();await bar.getByRole('button',{name:'Bearbeiten'}).click();await bar.locator('input').waitFor();
+wait=saved();await bar.locator('input').fill('/b.html');await bar.locator('input').press('Enter');await wait;await p.waitForTimeout(200);
+s=stored();ok('link: other attributes survive',s.includes('href="/b.html"')&&s.includes('target="_blank"')&&s.includes('title="T"'),s);
+await p.keyboard.press('Escape');
+// keyboard only
+await ready();await link.focus();await p.keyboard.press('Enter');await bar.waitFor({timeout:3000});
+ok('link: Enter shows the bar with focus',await bar.locator('button').first().evaluate(n=>n===n.ownerDocument.activeElement));
+await p.keyboard.press('Escape');await p.waitForTimeout(100);
+ok('link: Escape returns to the link',!(await bar.isVisible())&&await link.evaluate(n=>n===n.ownerDocument.activeElement));
+// not editable inline: address only
+setText('<table><tr><td><a href="/a.html">A</a></td></tr></table>');
+await ready();await link.click();await bar.waitFor({timeout:3000});
+ok('link: table stays intact, no edit',await bar.getByRole('button',{name:'Bearbeiten'}).count()==0&&(await bar.textContent()).includes('Seitenleiste')&&await fl.locator('.ProseMirror').count()==0,await bar.textContent());
+await p.keyboard.press('Escape');
+// a click next to the link still edits right away
+setText('<p>Text <a href="/a.html">A</a></p>');
+await ready();const tb=await fl.locator('[data-be-id="16"] .rte').boundingBox();await p.mouse.click(tb.x+5,tb.y+tb.height-8);await fl.locator('[data-be-id="16"] .ProseMirror').waitFor({timeout:3000});
+ok('link: click next to it edits',!(await bar.isVisible()));
+await p.keyboard.press('Escape');
+setText('<p>Textkoerper</p>');
 }
 // navigating through the website
 {

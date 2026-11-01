@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyLink, frameUrl, pagePath } from './navigation';
+import { classifyLink, frameUrl, linkLabel, pagePath } from './navigation';
 
 const paths = { base: '', preview: '/preview.php' };
 const nested = { base: '/sub', preview: '/sub/preview.php' };
@@ -77,5 +77,17 @@ describe('frameUrl', () => {
 
   it('keeps pages whose path only starts like a blocked one', () => {
     expect(frameUrl('https://example.com/contao-tipps.html', origin, paths, blocked)).toBe('https://example.com/preview.php/contao-tipps.html?_block_editor=1');
+  });
+});
+
+describe('linkLabel', () => {
+  it.each([
+    ['https://example.com/preview.php/a.html?_block_editor=1#b', '/a.html#b'],
+    ['https://example.com/a.html?x=1', '/a.html?x=1'],
+    ['https://other.example/a.html', 'https://other.example/a.html'],
+    ['mailto:a@example.com', 'a@example.com'],
+    ['tel:+49123', '+49123'],
+  ])('%s', (href, expected) => {
+    expect(linkLabel(href, 'https://example.com', paths)).toBe(expected);
   });
 });

@@ -1,10 +1,11 @@
 import { Editor } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import StarterKit from '@tiptap/starter-kit';
-import { classifyLink, type FramePaths } from './navigation';
+import { LinkBar } from './link-bar';
+import { classifyLink, linkLabel, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
-import { canEditInline, isSafeLink } from './rich-text-policy';
+import { canEditInline, isSafeLink, normalizeLinkInput } from './rich-text-policy';
 
 const ID_ATTRIBUTE = 'data-be-id';
 const BUDGET_MS = 50;
@@ -22,6 +23,8 @@ interface Session {
   /** The rendered nodes, shown again if nothing changed: no request is needed for that. */
   rendered: ChildNode[];
   target: HTMLElement;
+  /** Only rich text has one: its links can be changed. */
+  editor?: Editor;
   cleanup(): void;
   showValue(): void;
 }
@@ -122,8 +125,22 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
       content: html,
       extensions: [
         StarterKit.configure({ link: false }),
-        Link.configure({ openOnClick: false, autolink: false, isAllowedUri: (url) => isSafeLink(url ?? '') }),
+        // Without the null values, every link would get the extension's target and rel
+        Link.configure({ openOnClick: false, autolink: false, isAllowedUri: (url) => isSafeLink(url ?? ''), HTMLAttributes: { target: null, rel: null, class: null } }),
       ],
+      editorProps: {
+        handleKeyDown: (_, keyEvent) => {
+          if ((keyEvent.metaKey || keyEvent.ctrlKey) && !keyEvent.altKey && keyEvent.key.toLowerCase() === 'k') {
+            keyEvent.preventDefault();
+            refreshLinkBar(true);
+
+            return true;
+          }
+
+          return false;
+        },
+      },
+      onSelectionUpdate: () => refreshLinkBar(),
       onUpdate: ({ editor: instance }) => {
         element.values[field] = instance.getHTML();
         toShell({ type: 'cbe:change', id: element.id, field, value: element.values[field] });
@@ -152,9 +169,12 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
 
   session = {
     ...state,
+    editor: started,
     cleanup: () => started.destroy(),
     showValue: () => setHtml(target, String(element.values[field] ?? '')),
   };
+
+  refreshLinkBar();
 
   return true;
 }
@@ -231,6 +251,8 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
 }
 
 function endSession(): void {
+  linkBar.hide();
+
   if (!session) {
     return;
   }
@@ -267,6 +289,141 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
   toShell({ type: 'cbe:select', id });
 
   return caretPlaced;
+}
+
+/** Opens a link from wherever it is shown. Only called by a user's click. */
+function openLink(href: string): void {
+  const action = classifyLink(href, window.location.href, framePaths);
+
+  if (action === 'scroll') {
+    window.location.hash = new URL(href, document.baseURI).hash;
+  } else if (action === 'native') {
+    window.location.href = href;
+  } else if (action === 'open') {
+    window.open(href, '_blank', 'noopener');
+  } else if (action === 'page') {
+    endSession();
+    toShell({ type: 'cbe:navigate', href });
+  }
+}
+
+function linkIn(target: EventTarget | null): HTMLAnchorElement | HTMLAreaElement | null {
+  return target instanceof Element ? target.closest<HTMLAnchorElement | HTMLAreaElement>('a[href], area[href]') : null;
+}
+
+/** The rich text the link is part of, if it can be opened in the editor. */
+function editableText(element: FrameElement, root: HTMLElement, link: Element): InlineConfig | null {
+  const rich = element.inline.find(({ mode }) => mode === 'rich');
+
+  return rich && inlineTarget(rich, root)?.contains(link) && canEditInline(String(element.values?.[rich.field] ?? '')) ? rich : null;
+}
+
+function rectAnchor(link: Element): () => DOMRect | null {
+  return () => (link.isConnected ? link.getBoundingClientRect() : null);
+}
+
+/** The link as rendered: its address is resolved, unlike the raw insert tag in the editor. */
+function showLinkActions(link: HTMLAnchorElement | HTMLAreaElement, id: number, root: HTMLElement, focus: boolean): void {
+  const element = known.get(id) as FrameElement;
+  const canOpen = classifyLink(link.href, window.location.href, framePaths) !== 'none';
+
+  toShell({ type: 'cbe:select', id });
+
+  linkBar.showRead({
+    anchor: rectAnchor(link),
+    label: linkLabel(link.href, window.location.origin, framePaths),
+    open: canOpen ? () => openLink(link.href) : null,
+    edit: editableText(element, root, link) ? () => {
+      const index = Array.from(root.querySelectorAll('a')).indexOf(link as HTMLAnchorElement);
+      const text = link.textContent ?? '';
+
+      linkBar.hide();
+      activate(id, root, null);
+      selectLink(text, index);
+    } : null,
+    hint: 'Änderbar in der Seitenleiste oder im klassischen Backend',
+    close: () => {
+      linkBar.hide();
+      link.focus();
+    },
+    focus,
+  });
+}
+
+/**
+ * Puts the caret into the link that was clicked. Links can differ from the rendered ones
+ * (insert tags are plain text in here), so the text decides and the position only helps.
+ */
+function selectLink(text: string, index: number): void {
+  if (!session?.editor) {
+    return;
+  }
+
+  const { editor, target } = session;
+  const links = Array.from(target.querySelectorAll('a'));
+  const link = links[index]?.textContent === text ? links[index] : links.find((candidate) => candidate.textContent === text);
+
+  if (link) {
+    const from = editor.view.posAtDOM(link, 0);
+    const to = editor.view.posAtDOM(link, link.childNodes.length);
+
+    // The edge of a link counts as outside, so a single character has to be selected
+    editor.commands.setTextSelection(to - from < 2 ? { from, to } : Math.floor((from + to) / 2));
+  }
+
+  refreshLinkBar();
+}
+
+/** Keeps the bar in line with the caret: it shows up inside of links, or on request. */
+function refreshLinkBar(requested = false): void {
+  const editor = session?.editor;
+
+  if (!editor) {
+    return;
+  }
+
+  const inLink = editor.isActive('link');
+
+  if (!inLink && !(requested && !editor.state.selection.empty)) {
+    linkBar.hide();
+
+    return;
+  }
+
+  const href = String(editor.getAttributes('link').href ?? '');
+  const resolved = document.createElement('a');
+  resolved.href = href;
+
+  linkBar.showEdit({
+    anchor: () => editor.isDestroyed ? null : editor.view.coordsAtPos(editor.state.selection.from),
+    href,
+    // Without the server, an insert tag has no address yet
+    open: href && !href.includes('{{') ? () => openLink(resolved.href) : null,
+    apply: (value) => {
+      const next = normalizeLinkInput(value);
+
+      if (next !== '' && !isSafeLink(next)) {
+        return false;
+      }
+
+      const chain = editor.chain().focus().extendMarkRange('link');
+      const done = next === '' ? chain.unsetLink().run() : chain.setLink({ ...editor.getAttributes('link'), href: next } as { href: string }).run();
+
+      // The selection doesn't have to change, and then nothing else would update the bar
+      refreshLinkBar();
+
+      return done;
+    },
+    remove: inLink ? () => {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+      refreshLinkBar();
+    } : null,
+    cancel: () => {
+      linkBar.hide();
+      editor.view.focus();
+    },
+    focus: requested,
+  });
 }
 
 /** Where a moved element came from, to put it back if the server rejects the move. */
@@ -318,6 +475,8 @@ function neighbour(root: HTMLElement, direction: -1 | 1): HTMLElement | null {
   return roots[roots.indexOf(root) + direction] ?? null;
 }
 
+const linkBar = new LinkBar();
+
 const handle = document.createElement('button');
 handle.type = 'button';
 handle.className = 'cbe-handle';
@@ -367,8 +526,13 @@ document.addEventListener('pointerover', (event) => {
   }
 });
 
-window.addEventListener('scroll', placeHandle, { passive: true, capture: true });
-window.addEventListener('resize', placeHandle, { passive: true });
+const placeControls = (): void => {
+  placeHandle();
+  linkBar.place();
+};
+
+window.addEventListener('scroll', placeControls, { passive: true, capture: true });
+window.addEventListener('resize', placeControls, { passive: true });
 
 handle.addEventListener('dragstart', (event) => {
   if (!handleRoot || !event.dataTransfer || pendingMove) {
@@ -433,7 +597,7 @@ document.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  if (event.target === handle) {
+  if (event.target === handle || (event.target instanceof Node && linkBar.root.contains(event.target))) {
     return;
   }
 
@@ -447,6 +611,16 @@ document.addEventListener('pointerdown', (event) => {
 
   if (!hit) {
     toShell({ type: 'cbe:select', id: null });
+
+    return;
+  }
+
+  const link = linkIn(event.target);
+
+  // A link is both a way to another page and a part of the text, so the user decides
+  if (link && hit.root.contains(link)) {
+    showLinkActions(link, hit.id, hit.root, false);
+    placeHandle();
 
     return;
   }
@@ -471,26 +645,6 @@ const script = document.querySelector<HTMLScriptElement>('script[data-cbe-previe
 const framePaths: FramePaths = { base: script?.dataset.cbeBase ?? '', preview: script?.dataset.cbePreview ?? '' };
 const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
 
-/** Links in editable elements stay part of the canvas: a click there starts editing. */
-function followLink(link: HTMLAnchorElement | HTMLAreaElement, event: Event): void {
-  const action = classifyLink(link.href, window.location.href, framePaths);
-
-  if (action === 'native') {
-    return;
-  }
-
-  event.preventDefault();
-
-  if (action === 'scroll') {
-    window.location.hash = link.hash;
-  } else if (action === 'open') {
-    window.open(link.href, '_blank', 'noopener');
-  } else if (action === 'page') {
-    endSession();
-    toShell({ type: 'cbe:navigate', href: link.href });
-  }
-}
-
 // The page is a canvas in here: only links outside of editable elements navigate
 document.addEventListener('click', (event) => {
   const control = event.target instanceof Element ? event.target.closest('a, area, button, [type="submit"]') : null;
@@ -499,10 +653,16 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  if ((control instanceof HTMLAnchorElement || control instanceof HTMLAreaElement) && control.hasAttribute('href') && !closestId(control)) {
-    followLink(control, event);
-  } else {
-    event.preventDefault();
+  event.preventDefault();
+
+  const link = linkIn(control);
+
+  if (!link) {
+    return;
+  }
+
+  if (!closestId(link)) {
+    openLink(link.href);
   }
 }, true);
 
@@ -528,6 +688,18 @@ document.addEventListener('keydown', (event) => {
     return;
   }
 
+  const focusedLink = event.key === 'Enter' ? linkIn(event.target) : null;
+  const linkHit = focusedLink ? closestId(focusedLink) : null;
+
+  // The keyboard's way to the bar: there is no pointerdown, and browsers differ in the click
+  if (focusedLink && linkHit && !session?.target.contains(focusedLink)) {
+    event.preventDefault();
+    endSession();
+    showLinkActions(focusedLink, linkHit.id, linkHit.root, true);
+
+    return;
+  }
+
   if ((event.key === 'Enter' || event.key === ' ') && !session && event.target instanceof HTMLElement && event.target.hasAttribute(ID_ATTRIBUTE)) {
     const hit = closestId(event.target);
 
@@ -539,7 +711,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 function applyElements(elements: FrameElement[]): void {
-  document.body.append(handle, dropLine);
+  document.body.append(handle, dropLine, linkBar.root);
   handle.hidden = true;
   dropLine.hidden = true;
 

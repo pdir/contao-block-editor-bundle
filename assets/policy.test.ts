@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { canEditInline, isSafeLink } from './rich-text-policy';
+import { canEditInline, isSafeLink, normalizeLinkInput } from './rich-text-policy';
 import { SaveError, SaveQueue } from './save-queue';
 
 describe('canEditInline', () => {
@@ -73,5 +73,17 @@ describe('SaveQueue', () => {
     queue.flush();
     await vi.waitFor(() => expect(events.onFailed).toHaveBeenCalledWith(1, { text: 'a' }, error));
     expect(queue.pending).toBe(false);
+  });
+});
+
+describe('normalizeLinkInput', () => {
+  it.each([
+    ['  https://a.de ', 'https://a.de'],
+    ['www.a.de', 'https://www.a.de'],
+    ['/seite.html', '/seite.html'],
+    ['{{link_url::3}}', '{{link_url::3}}'],
+    ['   ', ''],
+  ])('%s', (value, expected) => {
+    expect(normalizeLinkInput(value)).toBe(expected);
   });
 });

@@ -53,3 +53,10 @@ export function isSafeLink(url: string): boolean {
 
   return !scheme || ['http', 'https', 'mailto', 'tel'].includes(scheme[1].toLowerCase());
 }
+
+/** What was typed as a link address. A bare domain would otherwise become a relative path. */
+export function normalizeLinkInput(value: string): string {
+  const href = value.trim();
+
+  return /^www\./i.test(href) ? `https://${href}` : href;
+}

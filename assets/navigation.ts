@@ -107,3 +107,20 @@ export function frameUrl(href: string, origin: string, paths: FramePaths, blocke
 
   return target.href;
 }
+
+/** The address as it is shown to the user: without the preview entry point and the marker. */
+export function linkLabel(href: string, origin: string, paths: FramePaths): string {
+  const url = parse(href, origin);
+
+  if (!url) {
+    return href;
+  }
+
+  if (url.origin !== origin || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    return url.protocol === 'mailto:' || url.protocol === 'tel:' ? url.pathname : href;
+  }
+
+  const search = searchWithoutMarker(url);
+
+  return pagePath(url.pathname, paths) + (search ? `?${search}` : '') + url.hash;
+}
