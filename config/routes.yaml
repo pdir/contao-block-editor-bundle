@@ -1,0 +1,3 @@
+pdir_block_editor:
+    resource: ../src/Controller/
+    type: attribute

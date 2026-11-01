@@ -1,0 +1,22 @@
+{
+  "name": "contao-block-editor-assets",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild assets/shell.ts assets/frame.ts assets/shell.css assets/frame.css --bundle --minify --format=esm --target=es2022 --outdir=public --metafile=var-meta.json --log-level=warning && node assets/check-budget.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.32.2",
+    "@tiptap/extension-link": "3.32.2",
+    "@tiptap/pm": "3.32.2",
+    "@tiptap/starter-kit": "3.32.2"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "jsdom": "29.1.1",
+    "typescript": "7.0.2",
+    "vitest": "4.1.12"
+  }
+}

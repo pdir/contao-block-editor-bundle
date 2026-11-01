@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex,nofollow">
+    <title>Block-Editor: {{ title }}</title>
+    <link rel="stylesheet" href="{{ asset('bundles/contaoblockeditor/shell.css') }}">
+    {% if frame_url is defined %}
+        <link rel="modulepreload" href="{{ asset('bundles/contaoblockeditor/frame.js') }}">
+        <script type="module" src="{{ asset('bundles/contaoblockeditor/shell.js') }}"></script>
+    {% endif %}
+</head>
+<body>
+    {% if frame_url is defined %}
+        <div id="cbe-app"
+             data-token="{{ token }}"
+             data-api="{{ path('pdir_block_editor_api_elements') }}"
+             data-schema="{{ path('pdir_block_editor_api_schema') }}">
+            <header class="cbe-bar">
+                <strong class="cbe-title">{{ title }}</strong>
+                <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
+                <a class="cbe-link" href="{{ path('contao_backend', {do: 'page'}) }}">Zum Backend</a>
+            </header>
+            <main class="cbe-main">
+                <iframe id="cbe-frame" class="cbe-frame" src="{{ frame_url }}" title="Seitenvorschau: {{ title }}"></iframe>
+                <aside id="cbe-inspector" class="cbe-inspector" aria-label="Eigenschaften des Elements">
+                    <p class="cbe-hint">Klicke auf ein Element, um es zu bearbeiten.</p>
+                </aside>
+            </main>
+        </div>
+    {% else %}
+        <main class="cbe-notice">
+            <h1>{{ title }}</h1>
+            {% if other_domain_url is defined %}
+                <p>Diese Seite liegt auf einer anderen Domain und kann nur dort bearbeitet werden.</p>
+                <p><a href="{{ other_domain_url }}">Editor auf der Domain der Seite öffnen</a></p>
+            {% else %}
+                <p>Der Block-Editor benötigt das Vorschau-Skript von Contao (<code>contao.preview_script</code>).</p>
+            {% endif %}
+            <p><a href="{{ path('contao_backend', {do: 'page'}) }}">Zum Backend</a></p>
+        </main>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,60 @@
+{
+  "name": "pdir/contao-block-editor-bundle",
+  "description": "Fast, block-based visual editor for Contao – edit content elements inline, directly in the frontend preview.",
+  "type": "contao-bundle",
+  "keywords": ["contao", "block editor", "visual editor", "inline editing", "page builder", "content elements"],
+  "license": "LGPL-3.0-or-later",
+  "authors": [
+    {
+      "name": "pdir GmbH",
+      "homepage": "https://pdir.de"
+    }
+  ],
+  "require": {
+    "php": "^8.3",
+    "contao/core-bundle": "^5.7 || ^6.0",
+    "doctrine/dbal": "^3.7 || ^4.3",
+    "symfony/config": "^7.4 || ^8.0",
+    "symfony/dependency-injection": "^7.4 || ^8.0",
+    "symfony/event-dispatcher": "^7.4 || ^8.0",
+    "symfony/http-foundation": "^7.4 || ^8.0",
+    "symfony/http-kernel": "^7.4 || ^8.0",
+    "symfony/routing": "^7.4 || ^8.0",
+    "symfony/security-bundle": "^7.4 || ^8.0",
+    "symfony/security-core": "^7.4 || ^8.0",
+    "symfony/security-csrf": "^7.4 || ^8.0",
+    "twig/twig": "^3.21"
+  },
+  "require-dev": {
+    "contao/manager-plugin": "^2.0",
+    "phpunit/phpunit": "^11.5 || ^12.0"
+  },
+  "conflict": {
+    "contao/manager-plugin": "<2.0 || >=3.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Pdir\\ContaoBlockEditorBundle\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Pdir\\ContaoBlockEditorBundle\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "contao-manager-plugin": "Pdir\\ContaoBlockEditorBundle\\ContaoManager\\Plugin"
+  },
+  "config": {
+    "allow-plugins": {
+      "contao/manager-plugin": false,
+      "contao-components/installer": false,
+      "php-http/discovery": false,
+      "symfony/flex": false
+    },
+    "sort-packages": true
+  },
+  "scripts": {
+    "test": "phpunit"
+  }
+}

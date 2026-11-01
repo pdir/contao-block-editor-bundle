@@ -1,0 +1,7 @@
+/composer.lock
+/vendor/
+/node_modules/
+/.phpunit.cache
+/.idea/
+.DS_Store
+projektbeschreibung.md

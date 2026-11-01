@@ -1,0 +1,22 @@
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+        bind:
+            $csrfTokenManager: '@contao.csrf.token_manager'
+            $csrfTokenName: '%contao.csrf_token_name%'
+            $previewScript: '%contao.preview_script%'
+            $contentUrlGenerator: '@contao.routing.content_url_generator'
+
+    Pdir\ContaoBlockEditorBundle\:
+        resource: ../src/
+        exclude:
+            - ../src/ContaoBlockEditorBundle.php
+            - ../src/ContaoManager/
+            - ../src/DependencyInjection/
+            - ../src/DataContainer/
+            - ../src/Exception/
+
+    Pdir\ContaoBlockEditorBundle\Controller\:
+        resource: ../src/Controller/
+        public: true

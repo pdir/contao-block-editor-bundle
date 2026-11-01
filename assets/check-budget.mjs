@@ -1,0 +1,16 @@
+// Fails the build when a bundle outgrows its budget (gzip, in KiB).
+import { readFileSync, rmSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+
+const budgets = { 'public/shell.js': 8, 'public/frame.js': 130, 'public/shell.css': 3, 'public/frame.css': 1 };
+let failed = false;
+
+for (const [file, budget] of Object.entries(budgets)) {
+  const size = gzipSync(readFileSync(file)).length / 1024;
+  const ok = size <= budget;
+  failed ||= !ok;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${file}: ${size.toFixed(1)} KiB gzip (Budget ${budget} KiB)`);
+}
+
+rmSync('var-meta.json', { force: true });
+process.exit(failed ? 1 : 0);
