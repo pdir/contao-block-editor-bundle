@@ -342,6 +342,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       const current = field.multiple && Array.isArray(value) ? value.map(String) : [String(value ?? '')];
 
       select.multiple = field.multiple;
+      wrapper.classList.toggle('cbe-field--row', !field.multiple);
 
       for (const option of field.options) {
         const isSelected = current.includes(option.value);

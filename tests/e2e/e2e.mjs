@@ -258,6 +258,22 @@ q('DELETE FROM tl_content WHERE id IN (30,31)');
 }
 }
 await p.goto(B+'/contao/block-editor?id=2');await p.frameLocator('#cbe-frame').locator('[data-be-id="10"]').waitFor();ok('preview toolbar hidden in the frame',await p.frameLocator('#cbe-frame').locator('cto-toolbar').evaluateAll(n=>n.every(x=>getComputedStyle(x).display=='none')));
+// compact inspector
+{
+const fl=p.frameLocator('#cbe-frame');
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument?.documentElement?.classList.contains('cbe-ready'));
+await fl.locator('[data-be-id="16"] .rte').click();await p.locator('#cbe-inspector .cbe-field').first().waitFor();await p.locator('#cbe-inspector').click({position:{x:5,y:5}});
+const lineHeights=await p.locator('.cbe-description').evaluateAll(n=>n.map(x=>x.getBoundingClientRect().height));
+ok('inspector: descriptions take one line',lineHeights.length>0&&Math.max(...lineHeights)<24,Math.max(...lineHeights));
+const long=p.locator('.cbe-description').filter({hasText:/.{50}/}).first();
+const h1=(await long.boundingBox()).height;await long.hover();const h2=(await long.boundingBox()).height;
+ok('inspector: description opens on hover',h2>h1,h1+' → '+h2);
+await p.locator('#cbe-inspector h2').hover();
+const row=p.locator('.cbe-field--row').first();const lb=await row.locator('label').boundingBox(),sb=await row.locator('select').boundingBox();
+ok('inspector: select next to its label',sb.x>=lb.x+lb.width-1&&sb.y<lb.y+lb.height,JSON.stringify([lb,sb]));
+await row.locator('select').focus();ok('inspector: description opens on focus',await row.locator('.cbe-description').evaluate(n=>getComputedStyle(n).whiteSpace=='normal'));
+await p.keyboard.press('Escape');
+}
 if(process.env.E2E_DB_CONTAINER)// links in editable text
 {
 const fl=p.frameLocator('#cbe-frame');

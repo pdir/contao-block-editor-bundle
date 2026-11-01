@@ -111,6 +111,16 @@ body {
 .cbe-description {
   font-size: 12px;
   margin: 4px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Focus also covers the keyboard and touch screens, which have no hover */
+.cbe-description:hover,
+.cbe-field:focus-within .cbe-description {
+  overflow: visible;
+  white-space: normal;
 }
 
 .cbe-field {
@@ -133,6 +143,21 @@ body {
   font: inherit;
   padding: 6px 8px;
   width: 100%;
+}
+
+.cbe-field--row {
+  align-items: center;
+  column-gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.cbe-field--row label {
+  margin-bottom: 0;
+}
+
+.cbe-field--row .cbe-description {
+  grid-column: 1 / -1;
 }
 
 .cbe-unit {
@@ -203,6 +228,15 @@ body {
   border: 1px solid var(--cbe-border);
   border-radius: 3px;
   font: 12px ui-monospace, monospace;
+}
+
+.cbe-help-more {
+  margin-top: 12px;
+}
+
+.cbe-help-more summary {
+  color: var(--cbe-accent);
+  cursor: pointer;
 }
 
 .cbe-help-handle {
