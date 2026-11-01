@@ -108,6 +108,29 @@ export function frameUrl(href: string, origin: string, paths: FramePaths, blocke
   return target.href;
 }
 
+/** Whether a page was loaded in a way that starts the editor. */
+export function isFrameUrl(href: string, { preview }: FramePaths): boolean {
+  const url = parse(href, 'http://invalid');
+
+  return !!url && isBelow(url.pathname, preview) && url.searchParams.get(FRAME_PARAMETER) === '1';
+}
+
+/** The same page as a visitor requests it: without the preview entry point and the marker. */
+export function publicUrl(href: string, origin: string, paths: FramePaths): string | null {
+  const url = parse(href, origin);
+
+  if (!url || url.origin !== origin) {
+    return null;
+  }
+
+  const target = new URL(origin);
+  target.pathname = (paths.base + pagePath(url.pathname, paths)).replace(/^\/\//, '/');
+  target.search = url.search;
+  target.searchParams.delete(FRAME_PARAMETER);
+
+  return target.href;
+}
+
 /** The address as it is shown to the user: without the preview entry point and the marker. */
 export function linkLabel(href: string, origin: string, paths: FramePaths): string {
   const url = parse(href, origin);

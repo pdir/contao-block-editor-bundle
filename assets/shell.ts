@@ -1,4 +1,4 @@
-import { frameUrl, type FramePaths } from './navigation';
+import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
@@ -43,6 +43,7 @@ const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
 const NO_EDITOR_DELAY = 500;
+const MAX_REDIRECT_RECOVERIES = 3;
 
 const elements = new Map<number, Element>();
 let schema: Record<string, TypeSchema> = {};
@@ -50,6 +51,7 @@ let selected: number | null = null;
 /** The document in the frame that the shown data belongs to. */
 let currentLoad: number | null = null;
 let readySinceLoad = false;
+let redirectRecoveries = 0;
 let noEditorTimer: ReturnType<typeof setTimeout> | undefined;
 let saveFailed = false;
 let navigation = 0;
@@ -226,10 +228,19 @@ function rememberPage(page: FramePage | null): void {
   }
 }
 
+function loadInFrame(url: string): void {
+  // What the page on display announced says nothing about the next one
+  clearTimeout(noEditorTimer);
+  readySinceLoad = false;
+  setStatus('Seite wird geladen …');
+  frame.contentWindow?.location.replace(url);
+}
+
 /** Nothing gets lost: the page only changes after everything was saved successfully. */
 async function goTo(url: string, addToHistory: boolean): Promise<void> {
   const current = ++navigation;
 
+  redirectRecoveries = 0;
   saveFailed = false;
   await moving;
   await queue.settle();
@@ -252,8 +263,69 @@ async function goTo(url: string, addToHistory: boolean): Promise<void> {
   }
 
   hasLeftStart = true;
-  setStatus('Seite wird geladen …');
-  frame.contentWindow?.location.replace(url);
+  loadInFrame(url);
+}
+
+function frameHref(): string | null {
+  try {
+    return frame.contentWindow?.location.href ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Returns false if the limit is reached: redirects that go in circles must not run forever. */
+function reloadInEditor(url: string): boolean {
+  if (redirectRecoveries >= MAX_REDIRECT_RECOVERIES) {
+    return false;
+  }
+
+  redirectRecoveries++;
+  loadInFrame(url);
+
+  return true;
+}
+
+/**
+ * The address may lie outside of Contao, e.g. a shop or a rule of the web server. The
+ * preview entry point only knows Contao's pages, so it can't follow such a redirect:
+ * ask for the page as a visitor would and show the page this ends up on.
+ */
+async function findRedirectTarget(href: string): Promise<string | null> {
+  const url = publicUrl(href, window.location.origin, framePaths);
+
+  if (!url) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+    const target = new URL(response.url);
+
+    if (!response.redirected || pagePath(target.pathname, framePaths) === pagePath(new URL(url).pathname, framePaths)) {
+      return null;
+    }
+
+    return frameUrl(target.href, window.location.origin, framePaths, blockedPaths);
+  } catch {
+    // Another origin or no connection: nothing that could be shown in here
+    return null;
+  }
+}
+
+async function recoverFromMissingEditor(): Promise<void> {
+  const href = frameHref();
+  const current = navigation;
+  const target = href ? await findRedirectTarget(href) : null;
+
+  // The user went on in the meantime
+  if (current !== navigation || href !== frameHref()) {
+    return;
+  }
+
+  if (!target || !reloadInEditor(target)) {
+    showNoEditor();
+  }
 }
 
 function showNoEditor(): void {
@@ -496,6 +568,7 @@ window.addEventListener('message', (event) => {
   switch (message?.type) {
     case 'cbe:ready':
       readySinceLoad = true;
+      redirectRecoveries = 0;
 
       if (message.load === currentLoad) {
         break;
@@ -572,11 +645,24 @@ document.addEventListener('pointerdown', () => post({ type: 'cbe:end' }), true);
 frame.addEventListener('load', () => {
   post({ type: 'cbe:hello' });
 
+  // A redirect outside of Contao has lost the marker on its way
+  const href = frameHref();
+
+  if (href && !isFrameUrl(href, framePaths)) {
+    const url = frameUrl(href, window.location.origin, framePaths, blockedPaths);
+
+    if (url && reloadInEditor(url)) {
+      clearTimeout(noEditorTimer);
+
+      return;
+    }
+  }
+
   // Error pages and files come without the editor, so they can't announce themselves
   clearTimeout(noEditorTimer);
   noEditorTimer = setTimeout(() => {
     if (!readySinceLoad) {
-      showNoEditor();
+      void recoverFromMissingEditor();
     }
 
     readySinceLoad = false;

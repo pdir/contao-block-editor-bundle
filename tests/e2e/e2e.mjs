@@ -365,6 +365,14 @@ await open(p);await shown(10);
 await fl.locator('nav a',{hasText:'Geheim'}).click();await shown(20);
 await fl.locator('nav a',{hasText:'Weiter'}).click();await shown(10);
 ok('nav: forward page keeps editor',(await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href)).includes('_block_editor=1'),await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href));
+// redirects that leave Contao: the editor comes back on the page they end up on
+await open(p);await addLink(p,'/extern-weiter.html');await fl.locator('#cbe-test-link').click();await shown(20);
+ok('nav: redirect through another application keeps editor',await fl.locator('[data-be-id="20"]').count()==1&&(await p.locator('#cbe-title').textContent()).includes('Geheim'),await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href));
+await open(p);await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.replace('/extern/de/'));await shown(20);
+ok('nav: page without marker gets the editor back',(await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href)).includes('/preview.php/geheim.html?_block_editor=1'));
+await open(p);await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.replace('/gibt-es-nicht.html'));await p.waitForFunction(()=>document.getElementById('cbe-status')?.textContent.includes('nicht angezeigt'),null,{timeout:8000});
+ok('nav: missing page still reports no editor',true);
+await open(p);await shown(10);
 // an anchor does not reload
 await addLink(p,'#part');await fl.locator('#cbe-test-link').click();await p.waitForTimeout(400);
 ok('nav: anchor stays on the page',await fl.locator('#cbe-test-link').count()==1);

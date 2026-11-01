@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { classifyLink, frameUrl, linkLabel, pagePath } from './navigation';
+import { classifyLink, frameUrl, isFrameUrl, linkLabel, pagePath, publicUrl } from './navigation';
 
 const paths = { base: '', preview: '/preview.php' };
 const nested = { base: '/sub', preview: '/sub/preview.php' };
@@ -77,6 +77,35 @@ describe('frameUrl', () => {
 
   it('keeps pages whose path only starts like a blocked one', () => {
     expect(frameUrl('https://example.com/contao-tipps.html', origin, paths, blocked)).toBe('https://example.com/preview.php/contao-tipps.html?_block_editor=1');
+  });
+});
+
+describe('isFrameUrl', () => {
+  it.each([
+    ['https://example.com/preview.php/a.html?_block_editor=1', true],
+    ['https://example.com/preview.php?_block_editor=1', true],
+    ['https://example.com/preview.php/a.html', false],
+    ['https://example.com/a.html?_block_editor=1', false],
+    ['https://example.com/preview.phpx/a.html?_block_editor=1', false],
+    ['about:blank', false],
+  ])('%s → %s', (href, expected) => {
+    expect(isFrameUrl(href, paths)).toBe(expected);
+  });
+});
+
+describe('publicUrl', () => {
+  it('removes the entry point and the marker, but keeps the rest', () => {
+    expect(publicUrl('https://example.com/preview.php/a.html?x=1&_block_editor=1#y', 'https://example.com', paths)).toBe('https://example.com/a.html?x=1');
+  });
+
+  it('respects the base path', () => {
+    expect(publicUrl('https://example.com/sub/preview.php/a.html?_block_editor=1', 'https://example.com', nested)).toBe('https://example.com/sub/a.html');
+    expect(publicUrl('https://example.com/sub/preview.php?_block_editor=1', 'https://example.com', nested)).toBe('https://example.com/sub/');
+  });
+
+  it('refuses other origins', () => {
+    expect(publicUrl('https://other.example/a.html', 'https://example.com', paths)).toBeNull();
+    expect(publicUrl('about:blank', 'https://example.com', paths)).toBeNull();
   });
 });
 
