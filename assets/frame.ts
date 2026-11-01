@@ -94,6 +94,12 @@ function setHtml(target: HTMLElement, html: string): void {
 function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
   const target = inlineTarget(inline, root);
   const { field } = inline;
+
+  // No data for this field: never empty the rendered content because of that
+  if (element.values?.[field] === undefined) {
+    return false;
+  }
+
   const html = String(element.values[field] ?? '');
 
   // Markup outside of the schema (tables, images, classes) must not get lost silently
@@ -155,6 +161,11 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
   }
 
   const { field } = inline;
+
+  if (element.values?.[field] === undefined) {
+    return false;
+  }
+
   const stored = element.values[field] as { value?: string; unit?: string } | null;
   const state = snapshot(element, inline, target);
 

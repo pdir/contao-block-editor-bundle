@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
     <title>Block-Editor: {{ title }}</title>
-    <link rel="stylesheet" href="{{ asset('bundles/contaoblockeditor/shell.css') }}">
+    <link rel="stylesheet" href="{{ assets.shell_css }}">
     {% if frame_url is defined %}
-        <link rel="modulepreload" href="{{ asset('bundles/contaoblockeditor/frame.js') }}">
-        <script type="module" src="{{ asset('bundles/contaoblockeditor/shell.js') }}"></script>
+        <link rel="modulepreload" href="{{ assets.frame_js }}">
+        <script type="module" src="{{ assets.shell_js }}"></script>
     {% endif %}
 </head>
 <body>
@@ -32,7 +32,10 @@
     {% else %}
         <main class="cbe-notice">
             <h1>{{ title }}</h1>
-            {% if other_domain_url is defined %}
+            {% if stale_assets is defined %}
+                <p>Die veröffentlichten Editor-Dateien passen nicht zur installierten Version des Bundles. Der Editor bleibt deshalb geschlossen, damit keine Inhalte beschädigt werden.</p>
+                <p>Bitte <code>vendor/bin/contao-console assets:install public --symlink</code> ausführen (ohne Managed Edition: <code>bin/console</code>) und die Seite neu laden.</p>
+            {% elseif other_domain_url is defined %}
                 <p>Diese Seite liegt auf einer anderen Domain und kann nur dort bearbeitet werden.</p>
                 <p><a href="{{ other_domain_url }}">Editor auf der Domain der Seite öffnen</a></p>
             {% else %}

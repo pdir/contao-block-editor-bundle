@@ -138,6 +138,19 @@ x=await call(p,10,{revision:el.revision,values:{cssID:'nur-string'}},H);ok('stri
 // cross-origin simple form-post
 x=await p.evaluate(async()=>{const r=await fetch('/contao/block-editor/api/elements/10',{method:'PATCH',headers:{'Content-Type':'text/plain'},body:'{}'});return{s:r.status}});ok('text/plain → 415/403',[403,415].includes(x.s),x.s);
 // versions
+// assets are versioned, so that shell and frame can never be mixed from the browser cache
+{
+  const urls=await frame.evaluate(()=>[...document.querySelectorAll('script[src*="contaoblockeditor"],link[href*="contaoblockeditor"]')].map(n=>n.src||n.href));
+  ok('frame assets versioned by content',urls.length==2&&urls.every(u=>/\?v=[0-9a-f]{32}$/.test(u)),urls.join(' '));
+  const shellUrls=await p.evaluate(()=>[...document.querySelectorAll('script[src*="contaoblockeditor"],link[href*="contaoblockeditor"]')].map(n=>n.src||n.href));
+  ok('shell assets versioned by content',shellUrls.length>=3&&shellUrls.every(u=>/\?v=[0-9a-f]{32}$/.test(u)),shellUrls.length);
+  // missing data (e.g. a mismatch of shell and frame) must not empty the content
+  const rte=fr.locator('[data-be-id="16"] .rte');const before=await rte.textContent();
+  await p.evaluate(()=>{const w=document.getElementById('cbe-frame').contentWindow;w.postMessage({type:'cbe:elements',elements:[{id:16,inline:[{field:'text',selector:'.rte',mode:'rich'}],values:{}}]},location.origin)});
+  await p.waitForTimeout(100);await rte.click();await p.waitForTimeout(100);
+  ok('missing data keeps the content',(await rte.textContent())==before&&before.trim()!=''&&await fr.locator('[data-be-id="16"] .ProseMirror').count()==0,before.trim());
+  await p.keyboard.press('Escape');
+}
 // visitor
 const v=await browser.newContext();const vp=await v.newPage();
 let vr=await vp.goto(B+'/index.html?_block_editor=1');let html=await vr.text();ok('visitor: no marker',vr.status()==200&&!html.includes('data-be-id')&&!html.includes('frame.js'),vr.status());

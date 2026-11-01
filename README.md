@@ -111,8 +111,20 @@ bin/console assets:install public
 bin/console cache:clear
 ```
 
-`framework.assets` muss aktiv sein, was mit installiertem `symfony/asset` standardmäßig gilt. Eine Datenbank-Migration ist
-nicht nötig, weil das Bundle keine eigenen Tabellen oder Spalten anlegt.
+Eine Datenbank-Migration ist nicht nötig, weil das Bundle keine eigenen Tabellen oder Spalten anlegt.
+
+## Update
+
+Nach jedem Update müssen die Dateien unter `public/bundles/contaoblockeditor` zur Bundle-Version passen. In der Managed
+Edition erledigt das `contao-setup` bei `composer install` und `composer update`. Sonst und bei Entwicklung per
+Path-Repository:
+
+```bash
+bin/console assets:install public --symlink
+```
+
+Mit `--symlink` bleiben die Dateien automatisch aktuell. Passen sie nicht zusammen, öffnet sich der Editor nicht und
+zeigt diesen Hinweis, denn alte Skripte verstehen die aktuelle API nicht und könnten Inhalte beschädigen.
 
 ## Entwicklung
 

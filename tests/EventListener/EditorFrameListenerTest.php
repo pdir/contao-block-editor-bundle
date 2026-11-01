@@ -6,6 +6,7 @@ namespace Pdir\ContaoBlockEditorBundle\Tests\EventListener;
 
 use Contao\ContentModel;
 use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
+use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Pdir\ContaoBlockEditorBundle\EventListener\EditorFrameListener;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -87,7 +88,7 @@ final class EditorFrameListenerTest extends TestCase
 
         $this->listener($request, true)->onResponse($this->event($request, $response));
 
-        $this->assertStringContainsString('frame.js" nonce="abc123"', (string) $response->getContent());
+        $this->assertMatchesRegularExpression('/frame\.js\?v=[0-9a-f]{32}" nonce="abc123"/', (string) $response->getContent());
         $this->assertSame("script-src 'nonce-abc123'", $response->headers->get('Content-Security-Policy'));
     }
 
@@ -118,7 +119,7 @@ final class EditorFrameListenerTest extends TestCase
         $tokenChecker = $this->createStub(TokenChecker::class);
         $tokenChecker->method('hasBackendUser')->willReturn($backendUser);
 
-        return new EditorFrameListener($stack, $tokenChecker);
+        return new EditorFrameListener($stack, $tokenChecker, new EditorAssets('/tmp'));
     }
 
     private function event(Request $request, Response $response): ResponseEvent

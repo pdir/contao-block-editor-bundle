@@ -7,6 +7,7 @@ namespace Pdir\ContaoBlockEditorBundle\EventListener;
 use Contao\ContentModel;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
 use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
+use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
@@ -21,11 +22,10 @@ final class EditorFrameListener
 {
     public const QUERY_PARAMETER = '_block_editor';
 
-    private const ASSET_PATH = '/bundles/contaoblockeditor/';
-
     public function __construct(
         private readonly RequestStack $requestStack,
         private readonly TokenChecker $tokenChecker,
+        private readonly EditorAssets $assets,
     ) {
     }
 
@@ -102,10 +102,10 @@ final class EditorFrameListener
 
         $nonce = $this->allowAssetsInCsp($response);
         $nonceAttribute = null === $nonce ? '' : ' nonce="'.$nonce.'"';
-        $assets = htmlspecialchars($basePath.self::ASSET_PATH, ENT_QUOTES);
+        $url = fn (string $file): string => htmlspecialchars($this->assets->url($file, $basePath), ENT_QUOTES);
 
-        $tags = '<link rel="stylesheet" href="'.$assets.'frame.css"'.$nonceAttribute.'>'
-            .'<script type="module" src="'.$assets.'frame.js"'.$nonceAttribute.'></script>';
+        $tags = '<link rel="stylesheet" href="'.$url('frame.css').'"'.$nonceAttribute.'>'
+            .'<script type="module" src="'.$url('frame.js').'"'.$nonceAttribute.'></script>';
 
         $response->setContent(substr_replace($content, $tags, $position, 0));
     }

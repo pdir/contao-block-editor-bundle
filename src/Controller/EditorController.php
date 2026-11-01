@@ -8,6 +8,7 @@ use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\CoreBundle\Routing\ContentUrlGenerator;
 use Contao\CoreBundle\Security\ContaoCorePermissions;
 use Contao\PageModel;
+use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Pdir\ContaoBlockEditorBundle\EventListener\EditorFrameListener;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
@@ -35,6 +36,7 @@ final class EditorController
         private readonly CsrfTokenManagerInterface $csrfTokenManager,
         private readonly string $csrfTokenName,
         private readonly string $previewScript,
+        private readonly EditorAssets $assets,
     ) {
     }
 
@@ -68,7 +70,19 @@ final class EditorController
 
         $parts = parse_url($url);
         $host = \is_array($parts) ? ($parts['host'] ?? '') : '';
-        $parameters = ['title' => (string) $page->title];
+        $parameters = [
+            'title' => (string) $page->title,
+            'assets' => array_combine(
+                ['shell_css', 'shell_js', 'frame_js'],
+                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js']),
+            ),
+        ];
+
+        if (!$this->assets->isDeployed()) {
+            $parameters['stale_assets'] = true;
+
+            return $this->render($parameters);
+        }
 
         // The editor relies on same-origin access. Pages on another domain must be edited
         // on that domain, where the user has their own session.
@@ -81,6 +95,14 @@ final class EditorController
             $parameters['token'] = $this->csrfTokenManager->getToken($this->csrfTokenName)->getValue();
         }
 
+        return $this->render($parameters);
+    }
+
+    /**
+     * @param array<string, mixed> $parameters
+     */
+    private function render(array $parameters): Response
+    {
         $response = new Response($this->twig->render('@ContaoBlockEditor/editor.html.twig', $parameters));
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->set('Content-Security-Policy', "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; frame-src 'self'; frame-ancestors 'self'; base-uri 'none'; form-action 'none'");
