@@ -1,7 +1,8 @@
 import { Editor } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import StarterKit from '@tiptap/starter-kit';
-import type { FrameElement, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
+import { classifyLink, type FramePaths } from './navigation';
+import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
 import { canEditInline, isSafeLink } from './rich-text-policy';
 
@@ -466,9 +467,41 @@ document.addEventListener('pointerdown', (event) => {
   }
 }, true);
 
-// The page is a canvas in here: links and forms must not navigate away
+const script = document.querySelector<HTMLScriptElement>('script[data-cbe-preview]');
+const framePaths: FramePaths = { base: script?.dataset.cbeBase ?? '', preview: script?.dataset.cbePreview ?? '' };
+const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
+
+/** Links in editable elements stay part of the canvas: a click there starts editing. */
+function followLink(link: HTMLAnchorElement | HTMLAreaElement, event: Event): void {
+  const action = classifyLink(link.href, window.location.href, framePaths);
+
+  if (action === 'native') {
+    return;
+  }
+
+  event.preventDefault();
+
+  if (action === 'scroll') {
+    window.location.hash = link.hash;
+  } else if (action === 'open') {
+    window.open(link.href, '_blank', 'noopener');
+  } else if (action === 'page') {
+    endSession();
+    toShell({ type: 'cbe:navigate', href: link.href });
+  }
+}
+
+// The page is a canvas in here: only links outside of editable elements navigate
 document.addEventListener('click', (event) => {
-  if (event.target instanceof Element && event.target.closest('a, button, [type="submit"]')) {
+  const control = event.target instanceof Element ? event.target.closest('a, area, button, [type="submit"]') : null;
+
+  if (!control) {
+    return;
+  }
+
+  if ((control instanceof HTMLAnchorElement || control instanceof HTMLAreaElement) && control.hasAttribute('href') && !closestId(control)) {
+    followLink(control, event);
+  } else {
     event.preventDefault();
   }
 }, true);
@@ -622,7 +655,8 @@ window.addEventListener('message', (event) => {
 
 function announce(): void {
   const ids = Array.from(document.querySelectorAll(`[${ID_ATTRIBUTE}]`), (node) => Number(node.getAttribute(ID_ATTRIBUTE)));
-  toShell({ type: 'cbe:ready', ids: [...new Set(ids)] });
+  // The time origin identifies this document: the shell may get several announcements
+  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)] });
 }
 
 announce();

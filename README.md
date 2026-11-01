@@ -19,7 +19,8 @@ Benutzerrechte und Elemente anderer Erweiterungen funktionieren wie gewohnt.
 Umgesetzt sind Inline-Text (Elemente `text` und `headline`), Inspector aus dem DCA, Autosave mit Versionierung und das
 Verschieben von Elementen, auch zwischen Artikeln und Spalten: per Griff links neben dem Element oder mit Alt + Pfeil
 hoch/runter, wenn das Element den Fokus hat. Ziel ist immer ein bearbeitbares Element, leere Artikel sind noch kein
-Ablageziel. Der Editor öffnet sich im Backend über die Operation „Im Block-Editor öffnen“ im Seitenbaum.
+Ablageziel. Links außerhalb der bearbeitbaren Elemente führen im Editor zur nächsten Seite, vorher wird alles gespeichert;
+externe Links und Dateien öffnen einen neuen Tab. Der Editor öffnet sich im Backend über die Operation „Im Block-Editor öffnen“ im Seitenbaum.
 
 Noch offen: Inserter, Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
 Responsive-Vorschau und die Erweiterungs-API. Felder, die der Editor noch nicht unterstützt, bleiben über den Link

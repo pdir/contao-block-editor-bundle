@@ -26,3 +26,6 @@ INSERT INTO tl_content (id,pid,ptable,sorting,tstamp,type,headline,text,listitem
  (16,1,'tl_article',896,1,'text','a:2:{s:5:"value";s:10:"Textkopf A";s:4:"unit";s:2:"h3";}','<p>Textkoerper</p>',NULL,'','a:2:{i:0;s:0:"";i:1;s:0:"";}'),
  (17,1,'tl_article',1024,1,'list','a:2:{s:5:"value";s:9:"Listkopf ";s:4:"unit";s:2:"h3";}',NULL,'a:1:{i:0;s:7:"Eintrag";}','','a:2:{i:0;s:0:"";i:1;s:0:"";}'),
  (18,1,'tl_article',1152,1,'text','a:2:{s:5:"value";s:10:"Tabellkopf";s:4:"unit";s:2:"h3";}','<table><tr><td>T</td></tr></table>',NULL,'','a:2:{i:0;s:0:"";i:1;s:0:"";}');
+INSERT INTO tl_page (id,pid,sorting,tstamp,title,alias,type,language,includeLayout,layout,published,robots,jumpTo,redirect) VALUES (4,1,384,1,'Weiter','weiter','forward','de',0,0,1,'index,follow',2,'permanent');
+INSERT INTO tl_module (id,pid,tstamp,name,type) VALUES (1,1,1,'Navigation','navigation');
+UPDATE tl_layout SET modules='a:2:{i:0;a:3:{s:3:"mod";s:1:"1";s:3:"col";s:4:"main";s:6:"enable";s:1:"1";}i:1;a:3:{s:3:"mod";s:1:"0";s:3:"col";s:4:"main";s:6:"enable";s:1:"1";}}' WHERE id=1;

@@ -16,10 +16,14 @@
         <div id="cbe-app"
              data-token="{{ token }}"
              data-api="{{ path('pdir_block_editor_api_elements') }}"
-             data-schema="{{ path('pdir_block_editor_api_schema') }}">
+             data-schema="{{ path('pdir_block_editor_api_schema') }}"
+             data-base="{{ app.request.basePath }}"
+             data-preview="{{ preview_url }}"
+             data-backend="{{ path('contao_backend') }}">
             <header class="cbe-bar">
-                <strong class="cbe-title">{{ title }}</strong>
+                <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
                 <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
+                <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <a class="cbe-link" href="{{ path('contao_backend', {do: 'page'}) }}">Zum Backend</a>
             </header>
             <main class="cbe-main">
@@ -38,6 +42,8 @@
                             <dd>Nach dem Klick auf ein Element stehen seine Einstellungen hier in der Seitenleiste.</dd>
                             <dt>Verschieben</dt>
                             <dd>Ziehe ein Element am Griff <span class="cbe-help-handle" aria-hidden="true">⠿</span>, der beim Überfahren erscheint. Oder setze den Fokus auf das Element und nutze <kbd>Alt</kbd> + <kbd>↑</kbd> oder <kbd>↓</kbd>.</dd>
+                            <dt>Seite wechseln</dt>
+                            <dd>Links außerhalb der bearbeitbaren Elemente, etwa in der Navigation, führen zur nächsten Seite. Vorher wird alles gespeichert. Die Zurück-Taste des Browsers funktioniert wie gewohnt.</dd>
                             <dt>Speichern</dt>
                             <dd>Änderungen werden automatisch gespeichert. Den Stand siehst du oben in der Leiste.</dd>
                             <dt>Insert-Tags</dt>

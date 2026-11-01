@@ -208,3 +208,11 @@ body {
 .cbe-help-handle {
   color: var(--cbe-accent);
 }
+
+.cbe-back {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}

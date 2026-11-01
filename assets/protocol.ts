@@ -15,6 +15,11 @@ export interface FrameElement {
 
 export type MovePosition = 'before' | 'after';
 
+export interface FramePage {
+  id: number;
+  title: string;
+}
+
 export type ToFrame =
   | { type: 'cbe:hello' }
   | { type: 'cbe:end' }
@@ -25,7 +30,8 @@ export type ToFrame =
   | { type: 'cbe:moved'; id: number; ok: boolean };
 
 export type ToShell =
-  | { type: 'cbe:ready'; ids: number[] }
+  | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[] }
+  | { type: 'cbe:navigate'; href: string }
   | { type: 'cbe:select'; id: number | null }
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
   | { type: 'cbe:commit'; id: number; render: boolean }

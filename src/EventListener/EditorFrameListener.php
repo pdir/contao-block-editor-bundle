@@ -7,8 +7,10 @@ namespace Pdir\ContaoBlockEditorBundle\EventListener;
 use Contao\ContentModel;
 use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
 use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
+use Contao\PageModel;
 use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
@@ -53,11 +55,17 @@ final class EditorFrameListener
         $response->headers->set('Cache-Control', 'private, no-store');
         $response->headers->remove('Expires');
 
+        if ($response->isRedirect() && \is_string($location = $response->headers->get('Location'))) {
+            $response->headers->set('Location', self::keepEditorInRedirect($location, $event->getRequest()));
+
+            return;
+        }
+
         if (!$response->isSuccessful() || !str_contains((string) $response->headers->get('Content-Type', 'text/html'), 'text/html')) {
             return;
         }
 
-        $this->injectAssets($response, $event->getRequest()->getBasePath());
+        $this->injectAssets($response, $event->getRequest());
     }
 
     /**
@@ -81,6 +89,37 @@ final class EditorFrameListener
         return substr_replace($buffer, ' data-be-id="'.$id.'"', $offset, 0);
     }
 
+    /**
+     * A forward page would otherwise lead out of the editor. Targets on other hosts
+     * and relative ones stay as they are: the frame can't show the former anyway.
+     */
+    public static function keepEditorInRedirect(string $location, Request $request): string
+    {
+        $parts = parse_url($location);
+
+        if (!\is_array($parts) || !str_starts_with($parts['path'] ?? '/', '/') || (isset($parts['host']) && strtolower($parts['host']) !== strtolower($request->getHost()))) {
+            return $location;
+        }
+
+        $path = $parts['path'] ?? '/';
+        $preview = $request->getBaseUrl();
+        $base = $request->getBasePath();
+
+        if ($path !== $preview && !str_starts_with($path, $preview.'/')) {
+            $path = $preview.('' !== $base && str_starts_with($path, $base.'/') ? substr($path, \strlen($base)) : $path);
+        }
+
+        $query = (string) ($parts['query'] ?? '');
+
+        if (!preg_match('/(^|&)'.self::QUERY_PARAMETER.'=/', $query)) {
+            $query .= ('' === $query ? '' : '&').self::QUERY_PARAMETER.'=1';
+        }
+
+        $origin = isset($parts['host']) ? (isset($parts['scheme']) ? $parts['scheme'].':' : '').'//'.$parts['host'].(isset($parts['port']) ? ':'.$parts['port'] : '') : '';
+
+        return $origin.$path.'?'.$query.(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
+    }
+
     private function isEditorRequest(): bool
     {
         $request = $this->requestStack->getMainRequest();
@@ -91,7 +130,7 @@ final class EditorFrameListener
             && $this->tokenChecker->hasBackendUser();
     }
 
-    private function injectAssets(Response $response, string $basePath): void
+    private function injectAssets(Response $response, Request $request): void
     {
         $content = (string) $response->getContent();
         $position = strripos($content, '</body>');
@@ -102,10 +141,17 @@ final class EditorFrameListener
 
         $nonce = $this->allowAssetsInCsp($response);
         $nonceAttribute = null === $nonce ? '' : ' nonce="'.$nonce.'"';
-        $url = fn (string $file): string => htmlspecialchars($this->assets->url($file, $basePath), ENT_QUOTES);
+        $url = fn (string $file): string => htmlspecialchars($this->assets->url($file, $request->getBasePath()), ENT_QUOTES);
+        $page = $request->attributes->get('pageModel');
+        $attributes = ' data-cbe-base="'.htmlspecialchars($request->getBasePath(), ENT_QUOTES).'" data-cbe-preview="'.htmlspecialchars($request->getBaseUrl(), ENT_QUOTES).'"';
+
+        if ($page instanceof PageModel) {
+            $attributes .= ' data-cbe-page-id="'.(int) $page->id.'" data-cbe-page-title="'.htmlspecialchars(html_entity_decode((string) ($page->pageTitle ?: $page->title), ENT_QUOTES), ENT_QUOTES).'"';
+        }
+
 
         $tags = '<link rel="stylesheet" href="'.$url('frame.css').'"'.$nonceAttribute.'>'
-            .'<script type="module" src="'.$url('frame.js').'"'.$nonceAttribute.'></script>';
+            .'<script type="module" src="'.$url('frame.js').'"'.$nonceAttribute.$attributes.'></script>';
 
         $response->setContent(substr_replace($content, $tags, $position, 0));
     }

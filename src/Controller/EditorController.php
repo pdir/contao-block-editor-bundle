@@ -92,6 +92,7 @@ final class EditorController
             $parameters['no_preview'] = true;
         } else {
             $parameters['frame_url'] = $request->getBasePath().$this->previewScript.($parts['path'] ?? '/').'?'.EditorFrameListener::QUERY_PARAMETER.'=1';
+            $parameters['preview_url'] = $request->getBasePath().$this->previewScript;
             $parameters['token'] = $this->csrfTokenManager->getToken($this->csrfTokenName)->getValue();
         }
 

@@ -18,6 +18,25 @@ use Symfony\Component\HttpKernel\HttpKernelInterface;
 
 final class EditorFrameListenerTest extends TestCase
 {
+    #[DataProvider('redirects')]
+    public function testKeepsEditorInRedirect(string $location, string $expected): void
+    {
+        $request = Request::create('https://example.com/preview.php/start.html', server: ['SCRIPT_NAME' => '/preview.php', 'SCRIPT_FILENAME' => '/preview.php']);
+
+        $this->assertSame($expected, EditorFrameListener::keepEditorInRedirect($location, $request));
+    }
+
+    public static function redirects(): iterable
+    {
+        yield 'absolute' => ['https://example.com/a.html', 'https://example.com/preview.php/a.html?_block_editor=1'];
+        yield 'path' => ['/a.html?x=1#y', '/preview.php/a.html?x=1&_block_editor=1#y'];
+        yield 'preview already' => ['/preview.php/a.html', '/preview.php/a.html?_block_editor=1'];
+        yield 'marker already' => ['/preview.php/a.html?_block_editor=1', '/preview.php/a.html?_block_editor=1'];
+        yield 'similar path' => ['/preview.phpx', '/preview.php/preview.phpx?_block_editor=1'];
+        yield 'other host' => ['https://other.example/a.html', 'https://other.example/a.html'];
+        yield 'relative' => ['a.html', 'a.html'];
+    }
+
     #[DataProvider('markup')]
     public function testAddsMarkerToRootTag(string $buffer, string $expected): void
     {

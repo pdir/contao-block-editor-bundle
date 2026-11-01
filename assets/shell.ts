@@ -1,4 +1,5 @@
-import type { FrameElement, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
+import { frameUrl, type FramePaths } from './navigation';
+import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 
@@ -34,13 +35,25 @@ const app = document.getElementById('cbe-app') as HTMLElement;
 const frame = document.getElementById('cbe-frame') as HTMLIFrameElement;
 const inspector = document.getElementById('cbe-inspector') as HTMLElement;
 const status = document.getElementById('cbe-status') as HTMLElement;
+const title = document.getElementById('cbe-title') as HTMLElement;
+const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl } = app.dataset as { token: string; api: string; schema: string };
+const { token, api, schema: schemaUrl, base, preview, backend } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend', string>;
+const framePaths: FramePaths = { base, preview };
+/** The back end and internal routes such as the logout are no pages of the website. */
+const blockedPaths = [backend, `${base}/_contao`];
+const NO_EDITOR_DELAY = 500;
 
 const elements = new Map<number, Element>();
 let schema: Record<string, TypeSchema> = {};
 let selected: number | null = null;
-let loaded = false;
+/** The document in the frame that the shown data belongs to. */
+let currentLoad: number | null = null;
+let readySinceLoad = false;
+let noEditorTimer: ReturnType<typeof setTimeout> | undefined;
+let saveFailed = false;
+let navigation = 0;
+let hasLeftStart = false;
 const awaitingRender = new Set<number>();
 /** Fields last changed by typing in the page: the page shows them correctly already. */
 const typedInPage = new Set<string>();
@@ -144,6 +157,8 @@ const queue = new SaveQueue(send, {
     const element = elements.get(id);
     const details = Object.values(error.errors).join(' ');
 
+    saveFailed = true;
+
     setStatus(details || error.message, true);
 
     if (element) {
@@ -183,13 +198,84 @@ async function moveElement(id: number, target: number, position: MovePosition): 
   }
 }
 
-async function loadElements(ids: number[]): Promise<void> {
+/** Forgets the previous page. The queue stays: its entries are replaced when tracked again. */
+function resetPage(): void {
+  elements.clear();
+  awaitingRender.clear();
+  typedInPage.clear();
+  sideEffects.clear();
+  selected = null;
+  back.hidden = true;
+  renderInspector();
+}
+
+function showPage(page: FramePage | null): void {
+  if (page) {
+    title.textContent = page.title;
+    document.title = `Block-Editor: ${page.title}`;
+    frame.title = `Seitenvorschau: ${page.title}`;
+  }
+}
+
+/** Only pages the user can edit go into the address: the editor refuses all others on reload. */
+function rememberPage(page: FramePage | null): void {
+  if (page && [...elements.values()].some((element) => element.editable)) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('id', String(page.id));
+    window.history.replaceState(window.history.state, '', url);
+  }
+}
+
+/** Nothing gets lost: the page only changes after everything was saved successfully. */
+async function goTo(url: string, addToHistory: boolean): Promise<void> {
+  const current = ++navigation;
+
+  saveFailed = false;
+  await moving;
+  await queue.settle();
+
+  if (current !== navigation) {
+    return;
+  }
+
+  if (saveFailed) {
+    // The browser moved on already when coming from its history: back to the page on display
+    if (!addToHistory) {
+      window.history.pushState({ frame: frame.contentWindow?.location.href }, '');
+    }
+
+    return;
+  }
+
+  if (addToHistory) {
+    window.history.pushState({ frame: url }, '');
+  }
+
+  hasLeftStart = true;
+  setStatus('Seite wird geladen …');
+  frame.contentWindow?.location.replace(url);
+}
+
+function showNoEditor(): void {
+  currentLoad = null;
+  resetPage();
+  back.hidden = !hasLeftStart;
+  setStatus('Diese Seite kann im Editor nicht angezeigt werden.', true);
+}
+
+async function loadElements(ids: number[], load: number, page: FramePage | null): Promise<void> {
   if (ids.length === 0) {
+    setStatus('');
+
     return;
   }
 
   const { elements: loaded } = await getJson<{ elements: Record<string, Element> }>(`${api}?ids=${ids.join(',')}`);
   const types = new Set<string>();
+
+  if (load !== currentLoad) {
+    return;
+  }
 
   for (const element of Object.values(loaded)) {
     elements.set(element.id, element);
@@ -201,6 +287,11 @@ async function loadElements(ids: number[]): Promise<void> {
   }
 
   const { types: loadedSchema } = await getJson<{ types: Record<string, TypeSchema> }>(`${schemaUrl}?types=${[...types].sort().join(',')}`);
+
+  if (load !== currentLoad) {
+    return;
+  }
+
   schema = loadedSchema;
 
   const frameElements: FrameElement[] = [...elements.values()]
@@ -212,6 +303,8 @@ async function loadElements(ids: number[]): Promise<void> {
     });
 
   post({ type: 'cbe:elements', elements: frameElements });
+  rememberPage(page);
+  setStatus(frameElements.length ? '' : 'Nur Ansicht: Auf dieser Seite gibt es nichts, das du bearbeiten darfst.');
 }
 
 function createField(element: Element, field: FieldSchema): HTMLElement {
@@ -401,13 +494,27 @@ window.addEventListener('message', (event) => {
 
   switch (message?.type) {
     case 'cbe:ready':
-      if (loaded) {
+      readySinceLoad = true;
+
+      if (message.load === currentLoad) {
         break;
       }
 
-      loaded = true;
-      loadElements(message.ids.filter(Number.isInteger)).catch((error: Error) => setStatus(error.message, true));
+      currentLoad = message.load;
+      resetPage();
+      showPage(message.page);
+      loadElements(message.ids.filter(Number.isInteger), message.load, message.page).catch((error: Error) => setStatus(error.message, true));
       break;
+    case 'cbe:navigate': {
+      const url = frameUrl(message.href, window.location.origin, framePaths, blockedPaths);
+
+      if (url) {
+        void goTo(url, true);
+      } else {
+        setStatus('Dieser Link führt aus der Website hinaus und wird im Editor nicht geöffnet.', true);
+      }
+      break;
+    }
     case 'cbe:select':
       if (selected !== message.id) {
         selected = message.id;
@@ -461,7 +568,31 @@ window.addEventListener('message', (event) => {
 document.addEventListener('pointerdown', () => post({ type: 'cbe:end' }), true);
 
 // Either side can start first: the frame announces itself and also answers this
-frame.addEventListener('load', () => post({ type: 'cbe:hello' }));
+frame.addEventListener('load', () => {
+  post({ type: 'cbe:hello' });
+
+  // Error pages and files come without the editor, so they can't announce themselves
+  clearTimeout(noEditorTimer);
+  noEditorTimer = setTimeout(() => {
+    if (!readySinceLoad) {
+      showNoEditor();
+    }
+
+    readySinceLoad = false;
+  }, NO_EDITOR_DELAY);
+});
+
+back.addEventListener('click', () => window.history.back());
+
+window.history.replaceState({ frame: frame.src }, '');
+
+window.addEventListener('popstate', (event) => {
+  const url = (event.state as { frame?: string } | null)?.frame;
+
+  if (url) {
+    void goTo(url, false);
+  }
+});
 post({ type: 'cbe:hello' });
 
 // Don't lose the last keystrokes when the tab is closed

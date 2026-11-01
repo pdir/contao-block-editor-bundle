@@ -257,6 +257,68 @@ m=await mv(p,30,{revision:await rev(p,30),target:31,position:'after'});ok('move 
 q('DELETE FROM tl_content WHERE id IN (30,31)');
 }
 }
+// navigating through the website
+{
+const fl=p.frameLocator('#cbe-frame');
+const shown=id=>p.waitForFunction(i=>{const d=document.getElementById('cbe-frame').contentDocument;return d?.documentElement?.classList.contains('cbe-ready')&&d.querySelector(`[data-be-id="${i}"]`)},id,{timeout:10000});
+const addLink=(pg,href)=>pg.evaluate(h=>{const d=document.getElementById('cbe-frame').contentDocument,a=d.createElement('a');a.id='cbe-test-link';a.href=h;a.textContent='Testlink';a.style.cssText='position:fixed;top:40%;left:40%;z-index:9999;background:#fff';d.body.append(a)},href);
+const open=async pg=>{await pg.goto(B+'/contao/block-editor?id=2');await pg.frameLocator('#cbe-frame').locator('nav a').first().waitFor({timeout:10000});await pg.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument?.documentElement?.classList.contains('cbe-ready')||document.getElementById('cbe-status').textContent)};
+await open(p);await shown(10);
+const secret=fl.locator('nav a',{hasText:'Geheim'});
+console.log('nav href',await secret.getAttribute('href'));
+const b10=await fl.locator('[data-be-id="10"] .rte').boundingBox();await p.mouse.click(b10.x+20,b10.y+8);await fl.locator('.ProseMirror').waitFor();await p.keyboard.type('NAV');
+await secret.click();await shown(20);
+ok('nav: page shown in frame',await fl.locator('[data-be-id="20"]').count()==1);
+ok('nav: address follows',new URL(p.url()).searchParams.get('id')=='3',p.url());
+ok('nav: title follows',(await p.locator('#cbe-title').textContent()).includes('Geheim')&&(await p.title()).includes('Geheim'),await p.title());
+ok('nav: frame keeps marker',(await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href)).includes('_block_editor=1'));
+const saved=await p.evaluate(async a=>(await(await fetch(a+'?ids=10')).json()).elements[10].values.text,await p.locator('#cbe-app').getAttribute('data-api'));
+ok('nav: typed text saved before leaving',saved.includes('NAV'),saved);
+const b20=await fl.locator('[data-be-id="20"]').boundingBox();await p.mouse.click(b20.x+20,b20.y+8);
+await p.locator('#cbe-inspector .cbe-field').first().waitFor({timeout:3000});ok('nav: new page is editable',await fl.locator('[data-be-id="20"] .ProseMirror').count()==1);
+await p.keyboard.press('Escape');
+await p.goBack();await shown(10);ok('nav: back',new URL(p.url()).searchParams.get('id')=='2'&&await fl.locator('[data-be-id="20"]').count()==0,p.url());
+ok('nav: back resets inspector',await p.locator('#cbe-inspector .cbe-field').count()==0);
+await p.goForward();await shown(20);ok('nav: forward',new URL(p.url()).searchParams.get('id')=='3',p.url());
+await p.reload();await shown(20);ok('nav: reload stays on the page',await fl.locator('[data-be-id="20"]').count()==1);
+await open(p);await shown(10);
+// Contao shows no link to a forward page that points to the current page
+await fl.locator('nav a',{hasText:'Geheim'}).click();await shown(20);
+await fl.locator('nav a',{hasText:'Weiter'}).click();await shown(10);
+ok('nav: forward page keeps editor',(await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href)).includes('_block_editor=1'),await p.evaluate(()=>document.getElementById('cbe-frame').contentWindow.location.href));
+// an anchor does not reload
+await addLink(p,'#part');await fl.locator('#cbe-test-link').click();await p.waitForTimeout(400);
+ok('nav: anchor stays on the page',await fl.locator('#cbe-test-link').count()==1);
+// external links and files get their own tab
+await p.evaluate(()=>document.getElementById('cbe-frame').contentDocument.getElementById('cbe-test-link').remove());
+await addLink(p,'https://example.com/');const [ext]=await Promise.all([p.context().waitForEvent('page'),fl.locator('#cbe-test-link').click()]);
+ok('nav: external opens a tab',ext.url().includes('example.com')||ext.url()=='about:blank',ext.url());await ext.close();
+ok('nav: external leaves frame alone',await fl.locator('#cbe-test-link').count()==1);
+await p.evaluate(()=>document.getElementById('cbe-frame').contentDocument.getElementById('cbe-test-link').remove());
+// the back end does not belong into the frame
+await addLink(p,'/contao/login');await fl.locator('#cbe-test-link').click();await p.waitForTimeout(400);
+ok('nav: back end refused',await fl.locator('#cbe-test-link').count()==1&&(await p.locator('#cbe-status').textContent()).includes('nicht geöffnet'),await p.locator('#cbe-status').textContent());
+await p.evaluate(()=>document.getElementById('cbe-frame').contentDocument.getElementById('cbe-test-link').remove());
+// error pages have no editor, but there is a way back
+await addLink(p,'/gibts-nicht.html');await fl.locator('#cbe-test-link').click();
+await p.locator('#cbe-back').waitFor({timeout:10000});ok('nav: error page explained',(await p.locator('#cbe-status').textContent()).includes('nicht angezeigt'),await p.locator('#cbe-status').textContent());
+await p.locator('#cbe-back').click();await shown(10);ok('nav: back from error page',await p.locator('#cbe-back').isHidden()&&!(await p.locator('#cbe-status').getAttribute('class')).includes('is-error'));
+// a failed save keeps the user on the page
+await open(p);await shown(10);
+await p.route('**/api/elements/10',r=>r.request().method()=='PATCH'?r.fulfill({status:409,contentType:'application/json',body:'{"error":"Konflikt"}'}):r.continue());
+const b=await fl.locator('[data-be-id="10"] .rte').boundingBox();await p.mouse.click(b.x+20,b.y+8);await fl.locator('.ProseMirror').waitFor();await p.keyboard.type('LOST');
+await fl.locator('nav a',{hasText:'Geheim'}).click();await p.waitForTimeout(1000);
+ok('nav: failed save stays on page',await fl.locator('[data-be-id="10"]').count()==1&&new URL(p.url()).searchParams.get('id')=='2'&&(await p.locator('#cbe-status').textContent()).includes('Konflikt'),await p.locator('#cbe-status').textContent());
+await p.unroute('**/api/elements/10');
+// without rights to the other page
+await open(e.pg);await e.pg.waitForTimeout(500);
+await e.pg.frameLocator('#cbe-frame').locator('nav a',{hasText:'Geheim'}).click();await e.pg.frameLocator('#cbe-frame').locator('[data-be-id="20"]').waitFor({timeout:10000});
+await e.pg.waitForFunction(()=>document.getElementById('cbe-status').textContent.includes('Nur Ansicht'),null,{timeout:5000}).catch(()=>{});
+ok('nav: editor sees read-only hint',(await e.pg.locator('#cbe-status').textContent()).includes('Nur Ansicht'),await e.pg.locator('#cbe-status').textContent());
+ok('nav: editor address stays editable',new URL(e.pg.url()).searchParams.get('id')=='2',e.pg.url());
+const be=await e.pg.frameLocator('#cbe-frame').locator('[data-be-id="20"]').boundingBox();await e.pg.mouse.click(be.x+20,be.y+8);await e.pg.waitForTimeout(300);
+ok('nav: editor cannot edit there',await e.pg.frameLocator('#cbe-frame').locator('.ProseMirror').count()==0);
+}
 console.log('browser errors:',pageErrors);
 await browser.close();
 const f=results.filter(r=>!r[0]).length;console.log(`\n${results.length-f}/${results.length} passed`);
