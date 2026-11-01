@@ -4,6 +4,8 @@
 export interface SaveResult {
   revision: string;
   values: Record<string, unknown>;
+  /** Labels of fields that callbacks changed although they were not sent. */
+  sideEffects?: string[];
 }
 
 export class SaveError extends Error {
@@ -16,7 +18,7 @@ export type Send = (id: number, revision: string, values: Record<string, unknown
 
 export interface QueueEvents {
   onStateChange(pending: boolean): void;
-  onSaved(id: number, values: Record<string, unknown>, sent: Record<string, unknown>): void;
+  onSaved(id: number, values: Record<string, unknown>, sent: Record<string, unknown>, sideEffects: string[]): void;
   onFailed(id: number, sent: Record<string, unknown>, error: SaveError): void;
 }
 
@@ -87,7 +89,7 @@ export class SaveQueue {
     try {
       const result = await this.send(id, entry.revision, sent, keepalive);
       entry.revision = result.revision;
-      this.events.onSaved(id, result.values, sent);
+      this.events.onSaved(id, result.values, sent, result.sideEffects ?? []);
     } catch (error) {
       // Later edits are based on a state the server rejected, so they are dropped too
       entry.dirty = {};

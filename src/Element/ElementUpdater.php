@@ -16,6 +16,7 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Exception as DbalException;
 use Pdir\ContaoBlockEditorBundle\DataContainer\EditorDataContainer;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\RouterInterface;
@@ -36,13 +37,14 @@ final class ElementUpdater
         private readonly ElementInspector $inspector,
         private readonly RouterInterface $router,
         private readonly RequestStack $requestStack,
+        private readonly LoggerInterface $logger,
     ) {
     }
 
     /**
      * @param array<string, mixed> $values
      *
-     * @return array{revision: string, values: array<string, mixed>}
+     * @return array{revision: string, values: array<string, mixed>, sideEffects?: list<string>}
      */
     public function update(int $id, string $revision, array $values): array
     {
@@ -69,7 +71,7 @@ final class ElementUpdater
     /**
      * @param array<string, mixed> $values
      *
-     * @return array{revision: string, values: array<string, mixed>}
+     * @return array{revision: string, values: array<string, mixed>, sideEffects?: list<string>}
      */
     private function doUpdate(int $id, string $revision, array $values): array
     {
@@ -172,10 +174,53 @@ final class ElementUpdater
 
         \assert(\is_array($final));
 
-        return [
+        $result = [
             'revision' => ElementInspector::revision($final),
             'values' => (array) ($this->inspector->getElements([$id])[$id]['values'] ?? []),
         ];
+
+        if ($changed = self::changedBySideEffect($row, $final, array_keys($values))) {
+            // Callbacks are allowed to do this, but it must not go unnoticed
+            $this->logger->warning('Saving a content element also changed other fields.', ['id' => $id, 'sent' => array_keys($values), 'changed' => $changed]);
+            $result['sideEffects'] = $this->labels($changed);
+        }
+
+        return $result;
+    }
+
+    /**
+     * The columns that changed although they were not part of the request.
+     *
+     * @param array<string, mixed> $before
+     * @param array<string, mixed> $after
+     * @param list<string>         $sent
+     *
+     * @return list<string>
+     */
+    public static function changedBySideEffect(array $before, array $after, array $sent): array
+    {
+        $changed = [];
+
+        foreach ($after as $column => $value) {
+            if ('tstamp' !== $column && !\in_array($column, $sent, true) && ($before[$column] ?? null) !== $value) {
+                $changed[] = (string) $column;
+            }
+        }
+
+        return $changed;
+    }
+
+    /**
+     * @param list<string> $fields
+     *
+     * @return list<string>
+     */
+    private function labels(array $fields): array
+    {
+        return array_map(
+            static fn (string $field): string => (string) ($GLOBALS['TL_DCA'][self::TABLE]['fields'][$field]['label'][0] ?? $GLOBALS['TL_LANG'][self::TABLE][$field][0] ?? $field),
+            $fields,
+        );
     }
 
     /**

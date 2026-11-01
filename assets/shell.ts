@@ -44,6 +44,8 @@ let loaded = false;
 const awaitingRender = new Set<number>();
 /** Fields last changed by typing in the page: the page shows them correctly already. */
 const typedInPage = new Set<string>();
+/** Fields that extensions changed during the current saves, shown once these are done. */
+const sideEffects = new Set<string>();
 /** Keeps the inspector in sync with what is typed in the page. */
 const fieldSync = new Map<string, (value: unknown) => void>();
 
@@ -97,14 +99,18 @@ const queue = new SaveQueue(send, {
     if (pending) {
       setStatus('Wird gespeichert …');
     } else if (!status.classList.contains('is-error')) {
-      setStatus('Gespeichert');
+      setStatus(sideEffects.size ? `Gespeichert. Eine Erweiterung hat auch das geändert: ${[...sideEffects].join(', ')}` : 'Gespeichert');
+    }
+
+    if (!pending) {
+      sideEffects.clear();
     }
 
     if (!pending) {
       renderAwaited();
     }
   },
-  onSaved(id, values, sent) {
+  onSaved(id, values, sent, changedFields) {
     const element = elements.get(id);
 
     if (!element) {
@@ -115,7 +121,9 @@ const queue = new SaveQueue(send, {
     status.classList.remove('is-error');
 
     // Inspector changes can affect the rendering (e.g. the headline level), as can insert tags
-    const needsRender = Object.keys(sent).some((field) => !typedInPage.has(`${id}:${field}`) || JSON.stringify(sent[field]).includes('{{'));
+    const needsRender = changedFields.length > 0 || Object.keys(sent).some((field) => !typedInPage.has(`${id}:${field}`) || JSON.stringify(sent[field]).includes('{{'));
+
+    changedFields.forEach((field) => sideEffects.add(field));
 
     for (const { field } of schema[element.type]?.inline ?? []) {
       if (field in values) {

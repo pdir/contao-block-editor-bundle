@@ -1,4 +1,5 @@
 import { chromium, firefox, webkit } from 'playwright';
+import { execFileSync } from 'node:child_process';
 const B='http://127.0.0.1:8765';
 const results=[]; const ok=(n,c,x='')=>{results.push([c,n,x]);console.log((c?'PASS':'FAIL'),n,x)};
 const browser=await ({chromium,firefox,webkit}[process.env.BROWSER||'chromium']).launch();
@@ -172,6 +173,16 @@ x=await call(e.pg,10,{revision:d.elements[10].revision,values:{cssID:['x','y']}}
 x=await call(e.pg,20,{revision:'x',values:{text:'<p>h</p>'}},EH);ok('editor: foreign element → 404',x.s==404,x.s+x.b.slice(0,80));
 x=await call(e.pg,10,{revision:d.elements[10].revision,values:{text:'<p>Editor</p>'}},EH);ok('editor: allowed edit → 200',x.s==200,x.s+' '+x.b.slice(0,200));
 const sch=await e.pg.evaluate(async()=>{const a=await fetch('/contao/block-editor/api/schema?types=text');return{s:a.status,cc:a.headers.get('cache-control'),e:a.headers.get('etag')}});ok('schema private+etag',sch.cc?.includes('private')&&!!sch.e,JSON.stringify(sch));
+// A save must only change the sent field, also with extensions installed (optional: needs database access)
+if(process.env.E2E_DB_CONTAINER){
+const row=()=>{const o=execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-e','SELECT * FROM tl_content WHERE id=10']).toString().split('\n');const k=o[0].split('\t'),v=o[1].split('\t');return Object.fromEntries(k.map((c,i)=>[c,v[i]]))};
+await p.goto(B+'/contao/block-editor?id=2');
+const at=await p.locator('#cbe-app').getAttribute('data-token');
+const de=await p.evaluate(async()=>(await fetch('/contao/block-editor/api/elements?ids=10')).json());
+const r0=row();const sr=await call(p,10,{revision:de.elements[10].revision,values:{text:'<p>Nur Text</p>'}},{'X-Block-Editor-Token':at});const r1=row();
+const diff=Object.keys(r1).filter(c=>r0[c]!==r1[c]&&!['tstamp','text'].includes(c));
+ok('save changes only the sent field',sr.s==200&&diff.length==0,sr.s+' '+diff.join());
+}
 console.log('browser errors:',pageErrors);
 await browser.close();
 const f=results.filter(r=>!r[0]).length;console.log(`\n${results.length-f}/${results.length} passed`);

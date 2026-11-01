@@ -203,7 +203,10 @@ final class ElementInspector
 
         $controller = $this->framework->getAdapter(Controller::class);
         $controller->loadDataContainer(self::TABLE);
-        $this->framework->getAdapter(System::class)->loadLanguageFile(self::TABLE);
+        $system = $this->framework->getAdapter(System::class);
+        // Widgets take their error messages from the default language file
+        $system->loadLanguageFile('default');
+        $system->loadLanguageFile(self::TABLE);
     }
 
     private function toClientValue(string $field, mixed $value): mixed
