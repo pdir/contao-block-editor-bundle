@@ -109,35 +109,48 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
 
   const state = snapshot(element, inline, target);
 
-  target.replaceChildren();
+  let editor: Editor | undefined;
 
-  const editor = new Editor({
-    element: target,
-    content: html,
-    extensions: [
-      StarterKit.configure({ link: false }),
-      Link.configure({ openOnClick: false, autolink: false, isAllowedUri: (url) => isSafeLink(url ?? '') }),
-    ],
-    onUpdate: ({ editor: instance }) => {
-      element.values[field] = instance.getHTML();
-      toShell({ type: 'cbe:change', id: element.id, field, value: element.values[field] });
-    },
-  });
+  // A failed start must never leave the element empty
+  try {
+    target.replaceChildren();
 
-  // Put the caret where the user clicked
-  if (event) {
-    const position = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+    editor = new Editor({
+      element: target,
+      content: html,
+      extensions: [
+        StarterKit.configure({ link: false }),
+        Link.configure({ openOnClick: false, autolink: false, isAllowedUri: (url) => isSafeLink(url ?? '') }),
+      ],
+      onUpdate: ({ editor: instance }) => {
+        element.values[field] = instance.getHTML();
+        toShell({ type: 'cbe:change', id: element.id, field, value: element.values[field] });
+      },
+    });
 
-    if (position) {
-      editor.commands.setTextSelection(position.pos);
+    // Put the caret where the user clicked
+    if (event) {
+      const position = editor.view.posAtCoords({ left: event.clientX, top: event.clientY });
+
+      if (position) {
+        editor.commands.setTextSelection(position.pos);
+      }
     }
+
+    editor.view.focus();
+  } catch (error) {
+    console.error('[block-editor] Der Editor konnte nicht gestartet werden:', error);
+    editor?.destroy();
+    target.replaceChildren(...state.rendered);
+
+    return false;
   }
 
-  editor.view.focus();
+  const started = editor;
 
   session = {
     ...state,
-    cleanup: () => editor.destroy(),
+    cleanup: () => started.destroy(),
     showValue: () => setHtml(target, String(element.values[field] ?? '')),
   };
 
