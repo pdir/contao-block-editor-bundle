@@ -10,6 +10,10 @@ import { canEditInline, isSafeLink, normalizeLinkInput } from './rich-text-polic
 const ID_ATTRIBUTE = 'data-be-id';
 const BUDGET_MS = 50;
 const HANDLE_SPACE = 30;
+/** Rounded corners and hover effects put the handle's way outside of the element. */
+const HANDLE_CORNER = 32;
+const HANDLE_MARGIN = 8;
+const HANDLE_SWITCH_DELAY = 200;
 
 const known = new Map<number, FrameElement>();
 
@@ -547,6 +551,10 @@ dropLine.setAttribute('aria-hidden', 'true');
 let handleRoot: HTMLElement | null = null;
 let dragged: HTMLElement | null = null;
 let drop: { target: HTMLElement; position: MovePosition } | null = null;
+let nextHandleRoot: HTMLElement | null = null;
+let handleSwitch: ReturnType<typeof setTimeout> | undefined;
+let pointerX = 0;
+let pointerY = 0;
 
 function placeHandle(): void {
   if (!handleRoot?.isConnected) {
@@ -570,12 +578,75 @@ function hideDropLine(): void {
   drop = null;
 }
 
+/** On the way to the handle, the pointer may cross a parent or a neighbour. */
+function isTowardsHandle(x: number, y: number): boolean {
+  if (handle.hidden || !handleRoot) {
+    return false;
+  }
+
+  const { left, right, top, bottom } = handle.getBoundingClientRect();
+  const edge = Math.max(right + HANDLE_MARGIN, handleRoot.getBoundingClientRect().left + HANDLE_CORNER);
+
+  return x >= left - HANDLE_MARGIN && x <= edge && y >= top - HANDLE_MARGIN && y <= bottom + HANDLE_MARGIN;
+}
+
+function showHandleOn(root: HTMLElement): void {
+  handleRoot = root;
+  placeHandle();
+}
+
+function cancelHandleSwitch(): void {
+  clearTimeout(handleSwitch);
+  handleSwitch = undefined;
+  nextHandleRoot = null;
+}
+
+function waitForHandleSwitch(): void {
+  handleSwitch = setTimeout(() => {
+    if (isTowardsHandle(pointerX, pointerY)) {
+      waitForHandleSwitch();
+
+      return;
+    }
+
+    const root = nextHandleRoot;
+    cancelHandleSwitch();
+
+    if (root?.isConnected && !dragged) {
+      showHandleOn(root);
+    }
+  }, HANDLE_SWITCH_DELAY);
+}
+
+document.addEventListener('pointermove', ({ clientX, clientY }) => {
+  pointerX = clientX;
+  pointerY = clientY;
+}, { passive: true });
+
 document.addEventListener('pointerover', (event) => {
   const root = closestId(event.target)?.root;
 
-  if (root && !dragged) {
-    handleRoot = root;
-    placeHandle();
+  pointerX = event.clientX;
+  pointerY = event.clientY;
+
+  // Also on the handle itself and on anything that isn't an element: the handle just stays
+  if (!root || dragged || root === handleRoot) {
+    cancelHandleSwitch();
+
+    return;
+  }
+
+  if (!handleRoot || handleRoot.contains(root)) {
+    cancelHandleSwitch();
+    showHandleOn(root);
+
+    return;
+  }
+
+  nextHandleRoot = root;
+
+  if (handleSwitch === undefined) {
+    waitForHandleSwitch();
   }
 });
 
