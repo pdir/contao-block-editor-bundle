@@ -72,8 +72,14 @@ function hasSection(element: Element): boolean {
 
 function inlineOf(element: Element): InlineConfig[] {
   const inline = schema[element.type]?.inline ?? [];
+  // Templates can show any text field, which only the page can tell
+  const texts: InlineConfig[] = (schema[element.type]?.fields ?? [])
+    .filter(({ name, input, multiple, size }) => input === 'text' && !multiple && size <= 1 && name in element.values && !inline.some(({ field }) => field === name))
+    .filter(({ name }) => element.values[name] === null || typeof element.values[name] === 'string')
+    .map(({ name }) => ({ field: name, selector: null, mode: 'plain', scalar: true }));
+  const section: InlineConfig[] = hasSection(element) ? [{ field: 'sectionHeadline', selector: null, mode: 'plain', section: true }] : [];
 
-  return hasSection(element) ? [...inline, { field: 'sectionHeadline', selector: null, mode: 'plain', section: true }] : inline;
+  return [...inline, ...texts, ...section];
 }
 
 function fieldsOf(element: Element): FieldSchema[] {
@@ -534,6 +540,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       }
 
       input.addEventListener('input', () => change(input.value));
+      fieldSync.set(field.name, (next) => { input.value = String(next ?? ''); });
       control = input;
     }
   }

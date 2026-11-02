@@ -7,6 +7,8 @@ export interface InlineConfig {
   mode: 'rich' | 'plain';
   /** The headline of the accordion section around the element, which is outside of its root. */
   section?: boolean;
+  /** A plain string, found by its text. Without it, the value is a text with a unit. */
+  scalar?: boolean;
 }
 
 export interface FrameElement {

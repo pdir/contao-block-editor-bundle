@@ -6,6 +6,7 @@ import { classifyLink, linkLabel, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
 import { canEditInline, isSafeLink, normalizeLinkInput } from './rich-text-policy';
+import { findByText } from './text-target';
 
 const ID_ATTRIBUTE = 'data-be-id';
 const BUDGET_MS = 50;
@@ -78,12 +79,34 @@ function isOnText(button: Element, x: number, y: number): boolean {
   return rects.length === 0 || rects.some(({ left, right, top, bottom }) => x >= left && x <= right && y >= top && y <= bottom);
 }
 
-function inlineTarget(inline: InlineConfig, root: HTMLElement): HTMLElement | null {
+/** The text of a plain field, which is either a string or a text with a unit. */
+function plainText(value: unknown): string {
+  return decodeEntities((typeof value === 'string' ? value : (value as { value?: string } | null)?.value) ?? '');
+}
+
+/** The value is passed in when the element shows another one than the record has by now. */
+function inlineTarget(inline: InlineConfig, root: HTMLElement, shown?: unknown): HTMLElement | null {
   if (inline.section) {
     return sectionButton(root);
   }
 
-  return inline.selector ? root.querySelector<HTMLElement>(inline.selector) : root;
+  const base = inline.selector ? root.querySelector<HTMLElement>(inline.selector) : root;
+
+  if (inline.mode === 'rich') {
+    return base;
+  }
+
+  // Only a tag of its own can be replaced as a whole: others may hold further fields as well
+  if (!inline.scalar && base && !base.children.length) {
+    return base;
+  }
+
+  const element = known.get(Number(root.getAttribute(ID_ATTRIBUTE)));
+  const rich = element?.inline.find(({ mode }) => mode === 'rich');
+  const richTarget = rich ? inlineTarget(rich, root) : null;
+  const value = shown === undefined ? element?.values[inline.field] : shown;
+
+  return findByText(inline.scalar || !base ? root : base, plainText(value), (candidate) => candidate.closest(`[${ID_ATTRIBUTE}]`) === root && !richTarget?.contains(candidate));
 }
 
 /** The part under the pointer, otherwise the element's main text. */
@@ -239,7 +262,8 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
     return false;
   }
 
-  const stored = element.values[field] as { value?: string; unit?: string } | null;
+  const stored = element.values[field];
+  const unit = (stored as { unit?: string } | null)?.unit;
   // Browsers can't edit inside of a button reliably, and the accordion listens to its keys and
   // clicks. So a stand-in takes its place for the time being, which looks the same.
   const target = inline.section ? document.createElement('div') : button;
@@ -257,7 +281,7 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
 
   const state = snapshot(element, inline, target);
 
-  target.textContent = decodeEntities(stored?.value ?? '');
+  target.textContent = plainText(stored);
 
   try {
     target.contentEditable = 'plaintext-only';
@@ -275,7 +299,7 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
   }
 
   const onInput = (): void => {
-    element.values[field] = { value: target.textContent ?? '', unit: stored?.unit };
+    element.values[field] = inline.scalar ? target.textContent ?? '' : { value: target.textContent ?? '', unit };
     toShell({ type: 'cbe:change', id: element.id, field, value: element.values[field] });
   };
 
@@ -318,7 +342,7 @@ function endSession(): void {
   const value = element.values[inline.field];
   const changed = (JSON.stringify(value) ?? '') !== initial;
   // An emptied headline has to disappear from the page altogether
-  const emptied = changed && inline.mode === 'plain' && !(value as { value?: string }).value;
+  const emptied = changed && inline.mode === 'plain' && !plainText(value);
 
   session.cleanup();
 
@@ -901,6 +925,7 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
   }
 
   const editing = session?.element.id === id && session.inline.field === field;
+  const shown = element.values[field];
 
   // Never overwrite what the user is typing right now, unless it was rejected
   if (editing && !force) {
@@ -914,7 +939,7 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
   }
 
   const root = findElement(id);
-  const target = root ? inlineTarget(inline, root) : null;
+  const target = root ? inlineTarget(inline, root, shown) : null;
 
   // Raw insert tags must not be shown: a refresh with the rendered content follows
   if (!target || hasInsertTag(value)) {
@@ -924,7 +949,7 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
   if (inline.mode === 'rich') {
     setHtml(target, String(value ?? ''));
   } else {
-    target.textContent = decodeEntities((value as { value?: string } | null)?.value ?? '');
+    target.textContent = plainText(value);
   }
 }
 
