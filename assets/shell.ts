@@ -76,9 +76,15 @@ function post(message: ToFrame): void {
   frame.contentWindow?.postMessage(message, window.location.origin);
 }
 
-function setStatus(text: string, isError = false): void {
+function setStatus(text: string, isError = false, state?: 'busy' | 'saved'): void {
   status.textContent = text;
   status.classList.toggle('is-error', isError);
+
+  if (state || isError) {
+    status.dataset.state = state ?? 'error';
+  } else {
+    delete status.dataset.state;
+  }
 }
 
 async function getJson<T>(url: string): Promise<T> {
@@ -117,9 +123,9 @@ const send = async (id: number, revision: string, values: Record<string, unknown
 const queue = new SaveQueue(send, {
   onStateChange(pending) {
     if (pending) {
-      setStatus('Wird gespeichert …');
+      setStatus('Wird gespeichert …', false, 'busy');
     } else if (!status.classList.contains('is-error')) {
-      setStatus(sideEffects.size ? `Gespeichert. Eine Erweiterung hat auch das geändert: ${[...sideEffects].join(', ')}` : 'Gespeichert');
+      setStatus(sideEffects.size ? `Gespeichert. Eine Erweiterung hat auch das geändert: ${[...sideEffects].join(', ')}` : 'Gespeichert', false, 'saved');
     }
 
     if (!pending) {
@@ -232,7 +238,7 @@ function loadInFrame(url: string): void {
   // What the page on display announced says nothing about the next one
   clearTimeout(noEditorTimer);
   readySinceLoad = false;
-  setStatus('Seite wird geladen …');
+  setStatus('Seite wird geladen …', false, 'busy');
   frame.contentWindow?.location.replace(url);
 }
 

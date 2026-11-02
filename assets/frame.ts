@@ -480,7 +480,6 @@ const linkBar = new LinkBar();
 const handle = document.createElement('button');
 handle.type = 'button';
 handle.className = 'cbe-handle';
-handle.textContent = '⠿';
 handle.title = 'Ziehen zum Verschieben (Tastatur: Alt + Pfeil hoch/runter)';
 handle.draggable = true;
 // Mouse only: the keyboard moves the focused element directly with Alt + arrow keys

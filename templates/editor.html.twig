@@ -21,9 +21,11 @@
              data-preview="{{ preview_url }}"
              data-backend="{{ path('contao_backend') }}">
             <header class="cbe-bar">
-                <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
-                <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
+                <div class="cbe-doc">
+                    <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
+                    <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
+                </div>
                 <div class="cbe-viewports" role="group" aria-label="Vorschaubreite">
                     <button class="cbe-viewport" type="button" data-viewport="desktop" aria-pressed="true" title="Volle Breite">Desktop</button>
                     <button class="cbe-viewport" type="button" data-viewport="tablet" aria-pressed="false" title="768 Pixel breit">Tablet</button>
@@ -47,7 +49,7 @@
                             <dt>Text</dt>
                             <dd>Reinklicken und tippen, <kbd>Esc</kbd> beendet.</dd>
                             <dt>Verschieben</dt>
-                            <dd>Griff <span class="cbe-help-handle" aria-hidden="true">⠿</span> ziehen oder <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>.</dd>
+                            <dd>Griff <span class="cbe-help-handle" aria-hidden="true"><svg viewBox="0 0 8 12" width="8" height="12" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span> ziehen oder <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>.</dd>
                             <dt>Links</dt>
                             <dd>Klick im Text: <em>Öffnen</em> oder <em>Bearbeiten</em>. Neu: Text markieren, <kbd>Strg</kbd>/<kbd>Cmd</kbd> + <kbd>K</kbd>.</dd>
                             <dt>Seite wechseln</dt>
