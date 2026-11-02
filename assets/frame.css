@@ -35,14 +35,22 @@
   outline: none;
 }
 
-/* Links of the navigation whose page name can be edited (switched on in the inspector) */
-.cbe-nav-link:hover {
+/* The reader module around a headline that is being edited is a content element as well */
+.cbe-editable:has(.cbe-record-field:hover, .cbe-record-field[contenteditable]) {
+  outline-color: transparent;
+}
+
+/* Links of the navigation whose page name can be edited (switched on in the inspector) and
+   the headline of a news or event on its reader page */
+.cbe-nav-link:hover,
+.cbe-record-field[data-cbe-editable]:hover {
   outline: 2px dashed rgb(244 124 0 / 60%);
   outline-offset: 2px;
 }
 
 .cbe-nav-link [contenteditable],
-.cbe-nav-link[contenteditable] {
+.cbe-nav-link[contenteditable],
+.cbe-record-field[data-cbe-editable][contenteditable] {
   cursor: text;
   outline: 2px solid #f47c00;
   outline-offset: 2px;

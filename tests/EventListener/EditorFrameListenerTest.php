@@ -5,16 +5,22 @@ declare(strict_types=1);
 namespace Pdir\ContaoBlockEditorBundle\Tests\EventListener;
 
 use Contao\ContentModel;
+use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
+use Doctrine\DBAL\Connection;
 use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Pdir\ContaoBlockEditorBundle\EventListener\EditorFrameListener;
+use Pdir\ContaoBlockEditorBundle\Record\ReaderRecord;
+use Pdir\ContaoBlockEditorBundle\Security\FieldPolicy;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
+use Symfony\Component\Routing\RouterInterface;
 
 final class EditorFrameListenerTest extends TestCase
 {
@@ -138,7 +144,15 @@ final class EditorFrameListenerTest extends TestCase
         $tokenChecker = $this->createStub(TokenChecker::class);
         $tokenChecker->method('hasBackendUser')->willReturn($backendUser);
 
-        return new EditorFrameListener($stack, $tokenChecker, new EditorAssets('/tmp'));
+        $records = new ReaderRecord(
+            $this->createStub(ContaoFramework::class),
+            $this->createStub(Connection::class),
+            $this->createStub(Security::class),
+            new FieldPolicy($this->createStub(Security::class)),
+            $this->createStub(RouterInterface::class),
+        );
+
+        return new EditorFrameListener($stack, $tokenChecker, new EditorAssets('/tmp'), $records);
     }
 
     private function event(Request $request, Response $response): ResponseEvent

@@ -31,7 +31,9 @@
              data-rich-editor="{{ assets.rich_editor_js }}"
              data-preview-menu="{{ assets.preview_menu_js }}"
              data-pages="{{ path('pdir_block_editor_api_pages') }}"
-             data-nav-pages="{{ assets.nav_pages_js }}">
+             data-nav-pages="{{ assets.nav_pages_js }}"
+             data-records="{{ path('pdir_block_editor_api_pages')|replace({'/pages': '/records'}) }}"
+             data-reader-record="{{ assets.reader_record_js }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">

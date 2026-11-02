@@ -33,6 +33,20 @@ export interface NavPage {
   editable: boolean;
 }
 
+/** The news or event of a reader page, named by the server. */
+export interface FrameRecord {
+  table: string;
+  id: number;
+  /** The reader module, where the fields of the record are shown. */
+  scope: string;
+}
+
+export interface RecordField {
+  name: string;
+  value: string;
+  editable: boolean;
+}
+
 export type ToFrame =
   | { type: 'cbe:hello' }
   | { type: 'cbe:end' }
@@ -48,10 +62,12 @@ export type ToFrame =
   /** Whether the names of pages can be edited in the navigation. */
   | { type: 'cbe:nav-edit'; enabled: boolean }
   | { type: 'cbe:nav-pages'; pages: NavPage[] }
-  | { type: 'cbe:page-title'; id: number; title: string };
+  | { type: 'cbe:page-title'; id: number; title: string }
+  | { type: 'cbe:record'; scope: string; fields: RecordField[] }
+  | { type: 'cbe:record-value'; field: string; value: string };
 
 export type ToShell =
-  | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[] }
+  | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[]; record: FrameRecord | null }
   | { type: 'cbe:navigate'; href: string }
   | { type: 'cbe:select'; id: number | null }
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
@@ -61,6 +77,8 @@ export type ToShell =
   | { type: 'cbe:nav-links'; urls: string[] }
   | { type: 'cbe:page-select'; id: number }
   | { type: 'cbe:page-change'; id: number; title: string }
+  | { type: 'cbe:record-select' }
+  | { type: 'cbe:record-change'; field: string; value: string }
   /** Pressed while the page had the focus. */
   | { type: 'cbe:shortcut'; name: Shortcut };
 

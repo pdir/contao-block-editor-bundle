@@ -86,39 +86,15 @@ export class NavLinks {
       return false;
     }
 
-    try {
-      target.contentEditable = 'plaintext-only';
-    } catch {
-      // Browsers without this mode: only textContent is read, so no markup can get in
-      target.contentEditable = 'true';
-    }
-
-    const onInput = (): void => {
-      const title = target.textContent ?? '';
-
-      this.setTitle(id, title, target);
-      this.toShell({ type: 'cbe:page-change', id, title });
-    };
-
-    const onKeydown = (event: KeyboardEvent): void => {
-      if (event.key === 'Enter') {
-        event.preventDefault();
-        this.end();
-      }
-    };
-
-    target.addEventListener('input', onInput);
-    target.addEventListener('keydown', onKeydown);
-    target.focus();
-
     this.editing = {
       id,
       target,
-      cleanup: () => {
-        target.removeEventListener('input', onInput);
-        target.removeEventListener('keydown', onKeydown);
-        target.removeAttribute('contenteditable');
-      },
+      cleanup: editPlainText(target, () => {
+        const title = target.textContent ?? '';
+
+        this.setTitle(id, title, target);
+        this.toShell({ type: 'cbe:page-change', id, title });
+      }, () => this.end()),
     };
 
     return true;
@@ -143,4 +119,35 @@ export class NavLinks {
 
     this.titles.set(id, title);
   }
+}
+
+/**
+ * Makes a text editable without any markup: only its text is read. Enter ends editing.
+ *
+ * @return Ends editing again.
+ */
+export function editPlainText(target: HTMLElement, onInput: () => void, onEnter: () => void): () => void {
+  try {
+    target.contentEditable = 'plaintext-only';
+  } catch {
+    // Browsers without this mode: only textContent is read, so no markup can get in
+    target.contentEditable = 'true';
+  }
+
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      onEnter();
+    }
+  };
+
+  target.addEventListener('input', onInput);
+  target.addEventListener('keydown', onKeydown);
+  target.focus();
+
+  return () => {
+    target.removeEventListener('input', onInput);
+    target.removeEventListener('keydown', onKeydown);
+    target.removeAttribute('contenteditable');
+  };
 }

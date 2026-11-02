@@ -80,8 +80,8 @@ final class EditorController
             'title' => (string) $page->title,
             'extension_scripts' => $this->assets->extensionUrls($request->getBasePath()),
             'assets' => array_combine(
-                ['shell_css', 'shell_js', 'frame_js', 'frame_css', 'rich_editor_js', 'restore_settings_js', 'preview_menu_js', 'nav_pages_js'],
-                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js', 'frame.css', 'rich-editor.js', 'restore-settings.js', 'preview-menu.js', 'nav-pages.js']),
+                ['shell_css', 'shell_js', 'frame_js', 'frame_css', 'rich_editor_js', 'restore_settings_js', 'preview_menu_js', 'nav_pages_js', 'reader_record_js'],
+                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js', 'frame.css', 'rich-editor.js', 'restore-settings.js', 'preview-menu.js', 'nav-pages.js', 'reader-record.js']),
             ),
         ];
 

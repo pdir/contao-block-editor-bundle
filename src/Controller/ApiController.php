@@ -11,6 +11,8 @@ use Pdir\ContaoBlockEditorBundle\Element\ElementUpdater;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
 use Pdir\ContaoBlockEditorBundle\Page\PageInspector;
 use Pdir\ContaoBlockEditorBundle\Page\PageUpdater;
+use Pdir\ContaoBlockEditorBundle\Record\ReaderRecord;
+use Pdir\ContaoBlockEditorBundle\Record\RecordUpdater;
 use Pdir\ContaoBlockEditorBundle\Security\RequestGuard;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -28,6 +30,8 @@ final class ApiController
         private readonly ElementMover $mover,
         private readonly PageInspector $pages,
         private readonly PageUpdater $pageUpdater,
+        private readonly ReaderRecord $records,
+        private readonly RecordUpdater $recordUpdater,
     ) {
     }
 
@@ -132,6 +136,35 @@ final class ApiController
             }
 
             return $this->json($this->pageUpdater->rename($id, $data['revision'], $data['title']));
+        });
+    }
+
+    /**
+     * The news or event of a reader page, whose headline is a field of the record.
+     */
+    #[Route('/records/{table}/{id}', name: 'pdir_block_editor_api_record', requirements: ['table' => 'tl_news|tl_calendar_events', 'id' => '[1-9]\d{0,9}'], methods: ['GET'])]
+    public function record(Request $request, string $table, int $id): Response
+    {
+        return $this->handle(function () use ($request, $table, $id): Response {
+            $this->guard->assertCanRead($request);
+
+            return $this->json($this->records->describe($table, $id) ?? throw new ApiException(404, 'Der Eintrag wurde nicht gefunden.'));
+        });
+    }
+
+    #[Route('/records/{table}/{id}', name: 'pdir_block_editor_api_record_update', requirements: ['table' => 'tl_news|tl_calendar_events', 'id' => '[1-9]\d{0,9}'], methods: ['PATCH'])]
+    public function updateRecord(Request $request, string $table, int $id): Response
+    {
+        return $this->handle(function () use ($request, $table, $id): Response {
+            $this->guard->assertCanWrite($request);
+
+            $data = $this->guard->decodeJsonBody($request);
+
+            if (!\is_string($data['revision'] ?? null) || !\is_array($data['values'] ?? null) || array_is_list($data['values'])) {
+                throw new ApiException(400, 'Ungültige Anfrage.');
+            }
+
+            return $this->json($this->recordUpdater->update($table, $id, $data['revision'], $data['values']));
         });
     }
 

@@ -9,6 +9,7 @@ use Contao\CoreBundle\DependencyInjection\Attribute\AsHook;
 use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
 use Contao\PageModel;
 use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
+use Pdir\ContaoBlockEditorBundle\Record\ReaderRecord;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -28,6 +29,7 @@ final class EditorFrameListener
         private readonly RequestStack $requestStack,
         private readonly TokenChecker $tokenChecker,
         private readonly EditorAssets $assets,
+        private readonly ReaderRecord $records,
     ) {
     }
 
@@ -149,6 +151,10 @@ final class EditorFrameListener
             $attributes .= ' data-cbe-page-id="'.(int) $page->id.'" data-cbe-page-title="'.htmlspecialchars(html_entity_decode((string) ($page->pageTitle ?: $page->title), ENT_QUOTES), ENT_QUOTES).'"';
         }
 
+        // The news or event of a reader module, whose headline is no content element
+        if ($record = $this->records->find($request, $content)) {
+            $attributes .= ' data-cbe-record="'.$record['table'].'.'.$record['id'].'" data-cbe-record-scope="'.$record['scope'].'"';
+        }
 
         $tags = '<link rel="stylesheet" href="'.$url('frame.css').'"'.$nonceAttribute.'>';
 

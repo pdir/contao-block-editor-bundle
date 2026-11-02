@@ -1,10 +1,11 @@
 import { ICONS, iconElement } from './editor-icons';
 import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
 import type { RichField } from './rich-editor';
-import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
+import type { FrameElement, FramePage, FrameRecord, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 import type { NavPages } from './nav-pages';
+import type { ReaderRecord } from './reader-record';
 import { applyCorners, applyInspector, applyViewport, storedInspector, storedNavEdit, storedRoundCorners, storedSingleKeys, storedViewport, storeNavEdit, storeSingleKeys, type Viewport } from './settings';
 import { isMac, shortcutFor, type Shortcut } from './shortcuts';
 
@@ -47,7 +48,7 @@ const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -61,6 +62,9 @@ let selected: number | null = null;
 let selectedPage: number | null = null;
 /** Loaded once page names can be edited in the navigation. */
 let navPages: Promise<NavPages> | null = null;
+/** The news or event of a reader page, and whether it is shown in the inspector. */
+let readerRecord: Promise<ReaderRecord> | null = null;
+let recordSelected = false;
 /** The document in the frame that the shown data belongs to. */
 let currentLoad: number | null = null;
 let readySinceLoad = false;
@@ -293,6 +297,7 @@ async function goTo(url: string, addToHistory: boolean): Promise<void> {
   await moving;
   await queue.settle();
   await navPages?.then((pages) => pages.settle());
+  await readerRecord?.then((record) => record.settle());
 
   if (current !== navigation) {
     return;
@@ -704,6 +709,19 @@ function renderInspector(): void {
 
   const element = selected === null ? undefined : elements.get(selected);
 
+  void readerRecord?.then((record) => record.forget());
+
+  if (!element && recordSelected && readerRecord) {
+    void readerRecord.then((record) => {
+      if (recordSelected && selected === null) {
+        inspector.replaceChildren();
+        record.render(inspector);
+      }
+    });
+
+    return;
+  }
+
   if (!element && selectedPage !== null && navPages) {
     const page = selectedPage;
 
@@ -762,10 +780,12 @@ window.addEventListener('message', (event) => {
       currentLoad = message.load;
       showCorners(storedRoundCorners());
       selectedPage = null;
+      recordSelected = false;
 
       if (navPages) {
         post({ type: 'cbe:nav-edit', enabled: true });
       }
+      loadRecord(message.record);
       resetPage();
       showPage(message.page);
       loadElements(message.ids.filter(Number.isInteger), message.load, message.page).catch((error: Error) => setStatus(error.message, true));
@@ -781,16 +801,27 @@ window.addEventListener('message', (event) => {
       break;
     }
     case 'cbe:select':
-      if (selected !== message.id || selectedPage !== null) {
+      if (selected !== message.id || selectedPage !== null || recordSelected) {
         selected = message.id;
         selectedPage = null;
+        recordSelected = false;
         renderInspector();
       }
       break;
     case 'cbe:page-select':
       selected = null;
       selectedPage = message.id;
+      recordSelected = false;
       renderInspector();
+      break;
+    case 'cbe:record-select':
+      selected = null;
+      selectedPage = null;
+      recordSelected = true;
+      renderInspector();
+      break;
+    case 'cbe:record-change':
+      void readerRecord?.then((record) => record.change(message.field, message.value, 'page'));
       break;
     case 'cbe:page-change':
       void navPages?.then((pages) => pages.rename(message.id, message.title, 'page'));
@@ -930,6 +961,20 @@ function showCorners(round: boolean, store = false): void {
   }
 }
 
+/** Only a reader page has a record. One that is still being saved keeps its queue until done. */
+function loadRecord(record: FrameRecord | null): void {
+  const previous = readerRecord;
+
+  readerRecord = record ? (import(readerRecordUrl) as Promise<typeof import('./reader-record')>).then(async ({ setupReaderRecord }) => {
+    await previous?.then((loaded) => loaded.settle());
+
+    const loaded = setupReaderRecord(record, { token, url: recordsUrl, post, setStatus });
+    await loaded.load().catch((error: Error) => setStatus(error.message, true));
+
+    return loaded;
+  }) : null;
+}
+
 function loadNavPages(): Promise<NavPages> {
   navPages ??= (import(navPagesUrl) as Promise<typeof import('./nav-pages')>).then(({ setupNavPages }) => setupNavPages({
     token,
@@ -1016,6 +1061,7 @@ function showShortcuts(): void {
   post({ type: 'cbe:end' });
   selected = null;
   selectedPage = null;
+  recordSelected = false;
   showInspector(true, true);
   renderInspector();
 
@@ -1092,6 +1138,7 @@ post({ type: 'cbe:hello' });
 window.addEventListener('pagehide', () => {
   queue.flush(true);
   void navPages?.then((pages) => pages.flush(true));
+  void readerRecord?.then((record) => record.flush(true));
 });
 
 window.addEventListener('beforeunload', (event) => {

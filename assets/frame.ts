@@ -1,8 +1,9 @@
 import type { Editor } from '@tiptap/core';
 import { LinkBar } from './link-bar';
 import { NavLinks } from './nav-links';
+import { RecordFields } from './record-fields';
 import { classifyLink, linkLabel, type FramePaths } from './navigation';
-import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
+import type { FrameElement, FramePage, FrameRecord, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
 import { createRichEditor, editLink, renderFormatBar, richValue } from './rich-text';
 import { canEditInline } from './rich-text-policy';
@@ -41,6 +42,7 @@ interface Session {
 let session: Session | null = null;
 /** Set up once the paths of the page are known. */
 let nav: NavLinks | null = null;
+let record: RecordFields | null = null;
 
 function hasInsertTag(value: unknown): boolean {
   return (JSON.stringify(value) ?? '').includes('{{');
@@ -359,6 +361,7 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
 function endSession(): void {
   linkBar.hide();
   nav?.end();
+  record?.end();
 
   if (!session) {
     return;
@@ -799,6 +802,17 @@ document.addEventListener('pointerdown', (event) => {
     return;
   }
 
+  const field = record?.fieldAt(event.target);
+
+  if (field && record) {
+    if (!record.isEditing(event.target)) {
+      endSession();
+      record.start(field);
+    }
+
+    return;
+  }
+
   const navLink = nav?.linkAt(event.target);
 
   if (navLink && nav) {
@@ -860,6 +874,7 @@ document.addEventListener('pointerdown', (event) => {
 const script = document.querySelector<HTMLScriptElement>('script[data-cbe-preview]');
 const framePaths: FramePaths = { base: script?.dataset.cbeBase ?? '', preview: script?.dataset.cbePreview ?? '' };
 nav = new NavLinks(framePaths, (link) => closestId(link) !== null, toShell);
+record = new RecordFields((node) => closestId(node) !== null, toShell);
 
 /** A link of the navigation still leads to its page, from the bar above it. */
 function showNavActions(link: HTMLAnchorElement, editable: boolean): void {
@@ -878,6 +893,8 @@ function showNavActions(link: HTMLAnchorElement, editable: boolean): void {
 }
 
 const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
+const [recordTable, recordId] = (script?.dataset.cbeRecord ?? '').split('.');
+const frameRecord: FrameRecord | null = recordId ? { table: recordTable, id: Number(recordId), scope: script?.dataset.cbeRecordScope ?? '' } : null;
 
 // The page is a canvas in here: only links outside of editable elements navigate
 document.addEventListener('click', (event) => {
@@ -1085,6 +1102,12 @@ window.addEventListener('message', (event) => {
     case 'cbe:page-title':
       nav?.setTitle(message.id, message.title);
       break;
+    case 'cbe:record':
+      record?.apply(message.scope, message.fields);
+      break;
+    case 'cbe:record-value':
+      record?.setValue(message.field, message.value);
+      break;
     case 'cbe:picked':
       if (message.value !== null) {
         picked?.(message.value);
@@ -1112,7 +1135,7 @@ window.addEventListener('message', (event) => {
 function announce(): void {
   const ids = Array.from(document.querySelectorAll(`[${ID_ATTRIBUTE}]`), (node) => Number(node.getAttribute(ID_ATTRIBUTE)));
   // The time origin identifies this document: the shell may get several announcements
-  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)] });
+  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)], record: frameRecord });
 }
 
 announce();
