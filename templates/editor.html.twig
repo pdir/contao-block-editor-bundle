@@ -9,6 +9,8 @@
     {# The bars of the rich text editor, which the inspector shares with the page #}
     <link rel="stylesheet" href="{{ assets.frame_css }}">
     {% if frame_url is defined %}
+        {# Classic and blocking on purpose: the stored width and inspector apply before the first paint #}
+        <script src="{{ assets.restore_settings_js }}"></script>
         <link rel="modulepreload" href="{{ assets.frame_js }}">
         {% for script in extension_scripts %}
             <script type="module" src="{{ script }}"></script>

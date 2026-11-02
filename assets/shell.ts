@@ -4,6 +4,7 @@ import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
+import { applyInspector, applyViewport, storedInspector, storedViewport, type Viewport } from './settings';
 
 interface FieldSchema {
   name: string;
@@ -839,29 +840,11 @@ frame.addEventListener('load', () => {
 
 back.addEventListener('click', () => window.history.back());
 
-/** Only conveniences: without storage a choice lasts until the next reload. */
-function readSetting(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeSetting(key: string, value: string): void {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // See above
-  }
-}
-
-const VIEWPORT_KEY = 'cbe-viewport';
+const root = document.documentElement;
 const viewportButtons = [...document.querySelectorAll<HTMLButtonElement>('.cbe-viewport')];
 
-function showViewport(viewport: string): void {
-  (frame.parentElement as HTMLElement).dataset.viewport = viewport;
-  (viewportButtons[0]?.parentElement as HTMLElement | undefined)?.setAttribute('data-active', viewport);
+function showViewport(viewport: Viewport, store = false): void {
+  applyViewport(root, viewport, store);
 
   for (const button of viewportButtons) {
     button.setAttribute('aria-pressed', String(button.dataset.viewport === viewport));
@@ -869,35 +852,23 @@ function showViewport(viewport: string): void {
 }
 
 for (const button of viewportButtons) {
-  button.addEventListener('click', () => {
-    const viewport = button.dataset.viewport as string;
-
-    showViewport(viewport);
-    writeSetting(VIEWPORT_KEY, viewport);
-  });
+  button.addEventListener('click', () => showViewport(button.dataset.viewport as Viewport, true));
 }
 
-const storedViewport = readSetting(VIEWPORT_KEY);
+showViewport(storedViewport());
 
-if (viewportButtons.some((button) => button.dataset.viewport === storedViewport)) {
-  showViewport(storedViewport as string);
-}
-
-const INSPECTOR_KEY = 'cbe-inspector';
 const inspectorToggle = document.getElementById('cbe-inspector-toggle') as HTMLButtonElement;
 
-function showInspector(visible: boolean): void {
+function showInspector(visible: boolean, store = false): void {
+  applyInspector(root, visible, store);
   inspector.hidden = !visible;
   tooltip.hidden = true;
   inspectorToggle.setAttribute('aria-pressed', String(visible));
 }
 
-inspectorToggle.addEventListener('click', () => {
-  showInspector(Boolean(inspector.hidden));
-  writeSetting(INSPECTOR_KEY, inspector.hidden ? 'hidden' : 'visible');
-});
+inspectorToggle.addEventListener('click', () => showInspector(Boolean(inspector.hidden), true));
 
-showInspector(readSetting(INSPECTOR_KEY) !== 'hidden');
+showInspector(storedInspector());
 
 window.history.replaceState({ frame: frame.src }, '');
 

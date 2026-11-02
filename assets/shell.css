@@ -216,22 +216,24 @@ body {
   min-width: 0;
 }
 
-.cbe-main[data-viewport='tablet'] .cbe-frame,
-.cbe-main[data-viewport='mobile'] .cbe-frame {
+/* The stored choices are set on the root element before the first paint (restore-settings.ts) */
+:root[data-cbe-viewport='tablet'] .cbe-frame,
+:root[data-cbe-viewport='mobile'] .cbe-frame {
   flex: 0 1 auto;
   margin-inline: auto;
 }
 
-.cbe-main[data-viewport='tablet'] .cbe-frame {
+:root[data-cbe-viewport='tablet'] .cbe-frame {
   border-radius: 14px;
   width: 768px;
 }
 
-.cbe-main[data-viewport='mobile'] .cbe-frame {
+:root[data-cbe-viewport='mobile'] .cbe-frame {
   border-radius: 22px;
   width: 375px;
 }
 
+:root[data-cbe-inspector='hidden'] .cbe-inspector,
 .cbe-inspector[hidden] {
   display: none;
 }
@@ -288,11 +290,11 @@ body {
   width: 66px;
 }
 
-.cbe-viewports[data-active='tablet']::before {
+:root[data-cbe-viewport='tablet'] .cbe-viewports::before {
   transform: translateX(100%);
 }
 
-.cbe-viewports[data-active='mobile']::before {
+:root[data-cbe-viewport='mobile'] .cbe-viewports::before {
   transform: translateX(200%);
 }
 
@@ -310,9 +312,17 @@ body {
   transition: color 0.15s;
 }
 
+/* From the root element as well, which knows the stored width before the shell script runs */
 .cbe-viewport:hover,
-.cbe-viewport[aria-pressed='true'] {
+:root:not([data-cbe-viewport='tablet'], [data-cbe-viewport='mobile']) .cbe-viewport[data-viewport='desktop'],
+:root[data-cbe-viewport='tablet'] .cbe-viewport[data-viewport='tablet'],
+:root[data-cbe-viewport='mobile'] .cbe-viewport[data-viewport='mobile'] {
   color: var(--cbe-text);
+}
+
+:root[data-cbe-inspector='hidden'] #cbe-inspector-toggle:not(:hover, :active) {
+  background: none;
+  color: var(--cbe-muted);
 }
 
 /* Inspector */
