@@ -4,7 +4,8 @@ import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
-import { applyCorners, applyInspector, applyViewport, storedInspector, storedRoundCorners, storedViewport, type Viewport } from './settings';
+import type { NavPages } from './nav-pages';
+import { applyCorners, applyInspector, applyViewport, storedInspector, storedNavEdit, storedRoundCorners, storedViewport, storeNavEdit, type Viewport } from './settings';
 
 interface FieldSchema {
   name: string;
@@ -45,7 +46,7 @@ const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -55,6 +56,10 @@ const MAX_REDIRECT_RECOVERIES = 3;
 const elements = new Map<number, Element>();
 let schema: Record<string, TypeSchema> = {};
 let selected: number | null = null;
+/** A page chosen by its link in the navigation, shown when no element is selected. */
+let selectedPage: number | null = null;
+/** Loaded once page names can be edited in the navigation. */
+let navPages: Promise<NavPages> | null = null;
 /** The document in the frame that the shown data belongs to. */
 let currentLoad: number | null = null;
 let readySinceLoad = false;
@@ -286,6 +291,7 @@ async function goTo(url: string, addToHistory: boolean): Promise<void> {
   saveFailed = false;
   await moving;
   await queue.settle();
+  await navPages?.then((pages) => pages.settle());
 
   if (current !== navigation) {
     return;
@@ -697,12 +703,27 @@ function renderInspector(): void {
 
   const element = selected === null ? undefined : elements.get(selected);
 
+  if (!element && selectedPage !== null && navPages) {
+    const page = selectedPage;
+
+    void navPages.then((pages) => {
+      if (selectedPage === page && selected === null) {
+        inspector.replaceChildren();
+        pages.render(inspector, page);
+      }
+    });
+
+    return;
+  }
+
+  void navPages?.then((pages) => pages.forget());
+
   if (!element) {
     const help = document.querySelector<HTMLTemplateElement>('#cbe-help');
 
     if (help) {
       inspector.append(help.content.cloneNode(true));
-      bindCornerSetting();
+      bindSettings();
     }
 
     return;
@@ -738,6 +759,11 @@ window.addEventListener('message', (event) => {
 
       currentLoad = message.load;
       showCorners(storedRoundCorners());
+      selectedPage = null;
+
+      if (navPages) {
+        post({ type: 'cbe:nav-edit', enabled: true });
+      }
       resetPage();
       showPage(message.page);
       loadElements(message.ids.filter(Number.isInteger), message.load, message.page).catch((error: Error) => setStatus(error.message, true));
@@ -753,10 +779,22 @@ window.addEventListener('message', (event) => {
       break;
     }
     case 'cbe:select':
-      if (selected !== message.id) {
+      if (selected !== message.id || selectedPage !== null) {
         selected = message.id;
+        selectedPage = null;
         renderInspector();
       }
+      break;
+    case 'cbe:page-select':
+      selected = null;
+      selectedPage = message.id;
+      renderInspector();
+      break;
+    case 'cbe:page-change':
+      void navPages?.then((pages) => pages.rename(message.id, message.title, 'page'));
+      break;
+    case 'cbe:nav-links':
+      void navPages?.then((pages) => pages.resolve(message.urls)).catch((error: Error) => setStatus(error.message, true));
       break;
     case 'cbe:change':
       if (elements.has(message.id)) {
@@ -887,13 +925,59 @@ function showCorners(round: boolean, store = false): void {
   }
 }
 
-function bindCornerSetting(): void {
+function loadNavPages(): Promise<NavPages> {
+  navPages ??= (import(navPagesUrl) as Promise<typeof import('./nav-pages')>).then(({ setupNavPages }) => setupNavPages({
+    token,
+    url: pagesUrl,
+    paths: framePaths,
+    post,
+    setStatus,
+    open: (href) => {
+      const url = frameUrl(href, window.location.origin, framePaths, blockedPaths);
+
+      if (url) {
+        void goTo(url, true);
+      }
+    },
+  }));
+
+  return navPages;
+}
+
+/** Off again, the links lead to their pages. Unsaved names are saved first. */
+function showNavEdit(enabled: boolean): void {
+  if (enabled) {
+    void loadNavPages().then(() => post({ type: 'cbe:nav-edit', enabled: true })).catch((error: unknown) => console.error('[block-editor] Die Bearbeitung der Navigation fehlt:', error));
+  } else if (navPages) {
+    const loaded = navPages;
+
+    navPages = null;
+    selectedPage = null;
+    post({ type: 'cbe:nav-edit', enabled: false });
+    void loaded.then((pages) => pages.settle());
+  }
+}
+
+function bindSettings(): void {
   const corners = inspector.querySelector<HTMLInputElement>('[data-setting="corners"]');
+  const navEdit = inspector.querySelector<HTMLInputElement>('[data-setting="nav-edit"]');
 
   if (corners) {
     corners.checked = storedRoundCorners();
     corners.addEventListener('change', () => showCorners(corners.checked, true));
   }
+
+  if (navEdit) {
+    navEdit.checked = storedNavEdit();
+    navEdit.addEventListener('change', () => {
+      storeNavEdit(navEdit.checked);
+      showNavEdit(navEdit.checked);
+    });
+  }
+}
+
+if (storedNavEdit()) {
+  void loadNavPages();
 }
 
 const previewToggle = document.getElementById('cbe-preview-toggle') as HTMLButtonElement | null;
@@ -931,7 +1015,10 @@ window.addEventListener('popstate', (event) => {
 post({ type: 'cbe:hello' });
 
 // Don't lose the last keystrokes when the tab is closed
-window.addEventListener('pagehide', () => queue.flush(true));
+window.addEventListener('pagehide', () => {
+  queue.flush(true);
+  void navPages?.then((pages) => pages.flush(true));
+});
 
 window.addEventListener('beforeunload', (event) => {
   if (queue.pending) {

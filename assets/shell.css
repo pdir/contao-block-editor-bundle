@@ -787,6 +787,29 @@ body {
   opacity: 0.45;
 }
 
+/* A page, chosen by its link in the navigation */
+.cbe-page-details {
+  display: grid;
+  font-size: 12px;
+  gap: 4px 12px;
+  grid-template-columns: auto minmax(0, 1fr);
+  margin: 0 0 14px;
+}
+
+.cbe-page-details dt {
+  color: var(--cbe-muted);
+}
+
+.cbe-page-details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cbe-inspector > .cbe-button {
+  align-self: flex-start;
+  margin-bottom: 12px;
+}
+
 /* Help */
 .cbe-help {
   color: var(--cbe-muted);

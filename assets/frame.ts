@@ -1,5 +1,6 @@
 import type { Editor } from '@tiptap/core';
 import { LinkBar } from './link-bar';
+import { NavLinks } from './nav-links';
 import { classifyLink, linkLabel, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
@@ -36,6 +37,8 @@ interface Session {
 }
 
 let session: Session | null = null;
+/** Set up once the paths of the page are known. */
+let nav: NavLinks | null = null;
 
 function hasInsertTag(value: unknown): boolean {
   return (JSON.stringify(value) ?? '').includes('{{');
@@ -353,6 +356,7 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
 
 function endSession(): void {
   linkBar.hide();
+  nav?.end();
 
   if (!session) {
     return;
@@ -785,11 +789,27 @@ document.addEventListener('dragend', () => {
 // One delegated listener instead of one per element. pointerdown fires well before
 // click; no network request or rendering happens on this path.
 document.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0 || !known.size) {
+  if (event.button !== 0) {
     return;
   }
 
   if (event.target === handle || (event.target instanceof Node && (linkBar.root.contains(event.target) || formatBar.contains(event.target)))) {
+    return;
+  }
+
+  const navLink = nav?.linkAt(event.target);
+
+  if (navLink && nav) {
+    // The caret moves within the name that is being edited
+    if (!nav.isEditing(event.target)) {
+      endSession();
+      showNavActions(navLink, nav.start(navLink));
+    }
+
+    return;
+  }
+
+  if (!known.size) {
     return;
   }
 
@@ -837,6 +857,24 @@ document.addEventListener('pointerdown', (event) => {
 
 const script = document.querySelector<HTMLScriptElement>('script[data-cbe-preview]');
 const framePaths: FramePaths = { base: script?.dataset.cbeBase ?? '', preview: script?.dataset.cbePreview ?? '' };
+nav = new NavLinks(framePaths, (link) => closestId(link) !== null, toShell);
+
+/** A link of the navigation still leads to its page, from the bar above it. */
+function showNavActions(link: HTMLAnchorElement, editable: boolean): void {
+  linkBar.showRead({
+    anchor: rectAnchor(link),
+    label: linkLabel(link.href, window.location.origin, framePaths),
+    open: () => openLink(link.href),
+    edit: null,
+    hint: editable ? 'Den Namen direkt im Menü ändern' : 'Änderbar im klassischen Backend',
+    close: () => {
+      endSession();
+      link.focus();
+    },
+    focus: false,
+  });
+}
+
 const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
 
 // The page is a canvas in here: only links outside of editable elements navigate
@@ -855,7 +893,7 @@ document.addEventListener('click', (event) => {
     return;
   }
 
-  if (!closestId(link)) {
+  if (!closestId(link) && !nav?.linkAt(link)) {
     openLink(link.href);
   }
 }, true);
@@ -1025,6 +1063,15 @@ window.addEventListener('message', (event) => {
       break;
     case 'cbe:refresh':
       void refresh(message.id);
+      break;
+    case 'cbe:nav-edit':
+      nav?.enable(message.enabled);
+      break;
+    case 'cbe:nav-pages':
+      nav?.apply(message.pages);
+      break;
+    case 'cbe:page-title':
+      nav?.setTitle(message.id, message.title);
       break;
     case 'cbe:picked':
       if (message.value !== null) {

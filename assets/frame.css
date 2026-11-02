@@ -35,6 +35,19 @@
   outline: none;
 }
 
+/* Links of the navigation whose page name can be edited (switched on in the inspector) */
+.cbe-nav-link:hover {
+  outline: 2px dashed rgb(244 124 0 / 60%);
+  outline-offset: 2px;
+}
+
+.cbe-nav-link [contenteditable],
+.cbe-nav-link[contenteditable] {
+  cursor: text;
+  outline: 2px solid #f47c00;
+  outline-offset: 2px;
+}
+
 /* The core preview toolbar would cover content inside of the editor frame */
 cto-toolbar,
 .cto-toolbar__open,

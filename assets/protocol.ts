@@ -24,6 +24,14 @@ export interface FramePage {
   title: string;
 }
 
+/** A page behind a link of the navigation, by the address the frame knows the link by. */
+export interface NavPage {
+  url: string;
+  id: number;
+  title: string;
+  editable: boolean;
+}
+
 export type ToFrame =
   | { type: 'cbe:hello' }
   | { type: 'cbe:end' }
@@ -35,7 +43,11 @@ export type ToFrame =
   /** Null if the picker was closed without a choice. */
   | { type: 'cbe:picked'; value: string | null }
   | { type: 'cbe:revert'; id: number; field: string; value: unknown }
-  | { type: 'cbe:moved'; id: number; ok: boolean };
+  | { type: 'cbe:moved'; id: number; ok: boolean }
+  /** Whether the names of pages can be edited in the navigation. */
+  | { type: 'cbe:nav-edit'; enabled: boolean }
+  | { type: 'cbe:nav-pages'; pages: NavPage[] }
+  | { type: 'cbe:page-title'; id: number; title: string };
 
 export type ToShell =
   | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[] }
@@ -44,7 +56,10 @@ export type ToShell =
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
   | { type: 'cbe:commit'; id: number; render: boolean }
   | { type: 'cbe:move'; id: number; target: number; position: MovePosition }
-  | { type: 'cbe:pick-link'; id: number; value: string };
+  | { type: 'cbe:pick-link'; id: number; value: string }
+  | { type: 'cbe:nav-links'; urls: string[] }
+  | { type: 'cbe:page-select'; id: number }
+  | { type: 'cbe:page-change'; id: number; title: string };
 
 const PREFIX = 'cbe:';
 

@@ -9,6 +9,8 @@ use Pdir\ContaoBlockEditorBundle\Element\ElementInspector;
 use Pdir\ContaoBlockEditorBundle\Element\ElementMover;
 use Pdir\ContaoBlockEditorBundle\Element\ElementUpdater;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
+use Pdir\ContaoBlockEditorBundle\Page\PageInspector;
+use Pdir\ContaoBlockEditorBundle\Page\PageUpdater;
 use Pdir\ContaoBlockEditorBundle\Security\RequestGuard;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -24,6 +26,8 @@ final class ApiController
         private readonly ElementInspector $inspector,
         private readonly ElementUpdater $updater,
         private readonly ElementMover $mover,
+        private readonly PageInspector $pages,
+        private readonly PageUpdater $pageUpdater,
     ) {
     }
 
@@ -93,6 +97,41 @@ final class ApiController
             }
 
             return $this->json($this->mover->move($id, $data['revision'], $target, $position));
+        });
+    }
+
+    /**
+     * The pages behind the links of a navigation, so that their names can be edited.
+     */
+    #[Route('/pages', name: 'pdir_block_editor_api_pages', methods: ['GET'])]
+    public function pages(Request $request): Response
+    {
+        return $this->handle(function () use ($request): Response {
+            $this->guard->assertCanRead($request);
+
+            $urls = $request->query->all('url');
+
+            if (!array_is_list($urls) || \count($urls) > PageInspector::MAX_URLS || array_filter($urls, static fn ($url): bool => !\is_string($url) || \strlen($url) > 2048)) {
+                throw new ApiException(400, 'Ungültige Adressen.');
+            }
+
+            return $this->json(['pages' => (object) $this->pages->resolve(array_values(array_unique($urls)), $request)]);
+        });
+    }
+
+    #[Route('/pages/{id}', name: 'pdir_block_editor_api_page_update', requirements: ['id' => '[1-9]\d{0,9}'], methods: ['PATCH'])]
+    public function updatePage(Request $request, int $id): Response
+    {
+        return $this->handle(function () use ($request, $id): Response {
+            $this->guard->assertCanWrite($request);
+
+            $data = $this->guard->decodeJsonBody($request);
+
+            if (!\is_string($data['revision'] ?? null) || !\is_string($data['title'] ?? null)) {
+                throw new ApiException(400, 'Ungültige Anfrage.');
+            }
+
+            return $this->json($this->pageUpdater->rename($id, $data['revision'], $data['title']));
         });
     }
 

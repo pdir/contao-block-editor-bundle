@@ -29,7 +29,9 @@
              data-backend="{{ path('contao_backend') }}"
              data-picker="{{ path('contao_backend_picker') }}"
              data-rich-editor="{{ assets.rich_editor_js }}"
-             data-preview-menu="{{ assets.preview_menu_js }}">
+             data-preview-menu="{{ assets.preview_menu_js }}"
+             data-pages="{{ path('pdir_block_editor_api_pages') }}"
+             data-nav-pages="{{ assets.nav_pages_js }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">
@@ -112,6 +114,11 @@
                                 <div class="cbe-field cbe-field--switch">
                                     <label for="cbe-setting-corners">Abgerundete Ecken</label>
                                     <input id="cbe-setting-corners" type="checkbox" data-setting="corners">
+                                </div>
+                                <div class="cbe-field cbe-field--switch">
+                                    <label for="cbe-setting-nav-edit">Navigationslinks bearbeiten</label>
+                                    <input id="cbe-setting-nav-edit" type="checkbox" data-setting="nav-edit" aria-describedby="cbe-setting-nav-edit-hint">
+                                    <p id="cbe-setting-nav-edit-hint" class="cbe-description">Ein Klick auf einen Menüpunkt ändert den Seitennamen. Geöffnet wird die Seite dann über die Leiste am Link.</p>
                                 </div>
                             </div>
                         </details>

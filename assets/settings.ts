@@ -9,6 +9,7 @@ export type Viewport = (typeof VIEWPORTS)[number];
 const VIEWPORT_KEY = 'cbe-viewport';
 const INSPECTOR_KEY = 'cbe-inspector';
 const CORNERS_KEY = 'cbe-corners';
+const NAV_EDIT_KEY = 'cbe-nav-edit';
 
 function read(key: string): string | null {
   try {
@@ -71,4 +72,13 @@ export function applyCorners(root: HTMLElement, round: boolean, store = false): 
   if (store) {
     write(CORNERS_KEY, round ? 'round' : 'square');
   }
+}
+
+/** Whether page names can be edited in the navigation. Off by default: links lead to their page. */
+export function storedNavEdit(): boolean {
+  return read(NAV_EDIT_KEY) === 'on';
+}
+
+export function storeNavEdit(enabled: boolean): void {
+  write(NAV_EDIT_KEY, enabled ? 'on' : 'off');
 }
