@@ -5,7 +5,7 @@ import { LinkBar } from './link-bar';
 import { classifyLink, linkLabel, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
-import { canEditInline, isSafeLink, normalizeLinkInput } from './rich-text-policy';
+import { canEditInline, compactListItems, isSafeLink, normalizeLinkInput } from './rich-text-policy';
 import { findByText } from './text-target';
 
 const ID_ATTRIBUTE = 'data-be-id';
@@ -203,7 +203,7 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
       },
       onSelectionUpdate: () => refreshLinkBar(),
       onUpdate: ({ editor: instance }) => {
-        element.values[field] = instance.getHTML();
+        element.values[field] = compactListItems(instance.getHTML());
         toShell({ type: 'cbe:change', id: element.id, field, value: element.values[field] });
       },
     });

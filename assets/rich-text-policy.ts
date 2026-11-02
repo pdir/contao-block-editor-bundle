@@ -60,3 +60,26 @@ export function normalizeLinkInput(value: string): string {
 
   return /^www\./i.test(href) ? `https://${href}` : href;
 }
+
+/**
+ * The editor wraps the text of every list item in a paragraph, unlike Contao's own editor.
+ * Saved like that, a list would look different in the page, so single paragraphs go again.
+ */
+export function compactListItems(html: string): string {
+  if (!html.includes('<li><p>')) {
+    return html;
+  }
+
+  const { body } = new DOMParser().parseFromString(html, 'text/html');
+
+  for (const item of Array.from(body.querySelectorAll('li'))) {
+    const nodes = Array.from(item.childNodes).filter((node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim());
+
+    if (nodes.length === 1 && nodes[0] instanceof HTMLParagraphElement) {
+      nodes[0].replaceWith(...Array.from(nodes[0].childNodes));
+    }
+  }
+
+  return body.innerHTML;
+}
+

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest';
-import { canEditInline, isSafeLink, normalizeLinkInput } from './rich-text-policy';
+import { canEditInline, compactListItems, isSafeLink, normalizeLinkInput } from './rich-text-policy';
 import { SaveError, SaveQueue } from './save-queue';
 
 describe('canEditInline', () => {
@@ -87,3 +87,20 @@ describe('normalizeLinkInput', () => {
     expect(normalizeLinkInput(value)).toBe(expected);
   });
 });
+
+describe('compactListItems', () => {
+  it('keeps list items without a paragraph of their own, like Contao stores them', () => {
+    expect(compactListItems('<ul><li><p>Eins <strong>fett</strong></p></li><li><p>Zwei</p></li></ul>')).toBe('<ul><li>Eins <strong>fett</strong></li><li>Zwei</li></ul>');
+  });
+
+  it('leaves items with several paragraphs or nested lists alone', () => {
+    const html = '<ol><li><p>Eins</p><p>Zwei</p></li><li><p>Drei</p><ul><li><p>Vier</p></li></ul></li></ol>';
+
+    expect(compactListItems(html)).toBe('<ol><li><p>Eins</p><p>Zwei</p></li><li><p>Drei</p><ul><li>Vier</li></ul></li></ol>');
+  });
+
+  it('does not touch other markup', () => {
+    expect(compactListItems('<p>Text</p><blockquote><p>Zitat</p></blockquote>')).toBe('<p>Text</p><blockquote><p>Zitat</p></blockquote>');
+  });
+});
+
