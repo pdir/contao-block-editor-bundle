@@ -63,6 +63,9 @@ const awaitingRender = new Set<number>();
 const typedInPage = new Set<string>();
 /** Fields that extensions changed during the current saves, shown once these are done. */
 const sideEffects = new Set<string>();
+/** The element opened from the back end, shown once the page is ready. */
+let shownFirst: number | null = Number(new URLSearchParams(window.location.search).get('element')) || null;
+
 /** Keeps the inspector in sync with what is typed in the page. */
 const fieldSync = new Map<string, (value: unknown) => void>();
 
@@ -405,6 +408,12 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
     });
 
   post({ type: 'cbe:elements', elements: frameElements });
+
+  if (shownFirst !== null && frameElements.some(({ id }) => id === shownFirst)) {
+    post({ type: 'cbe:show', id: shownFirst });
+  }
+
+  shownFirst = null;
   rememberPage(page);
   setStatus(frameElements.length ? '' : 'Nur Ansicht: Auf dieser Seite gibt es nichts, das du bearbeiten darfst.');
 }

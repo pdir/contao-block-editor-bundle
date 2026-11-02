@@ -48,12 +48,13 @@ final class EditorController
 
         $this->framework->initialize();
 
-        $pageId = $request->query->getInt('id');
-        $page = $this->framework->getAdapter(PageModel::class)->findById($pageId);
+        $page = $this->resolvePage($request->query->getInt('id'), $request->getHost());
 
         if (!$page instanceof PageModel) {
             throw new NotFoundHttpException();
         }
+
+        $pageId = (int) $page->id;
 
         if (
             !$this->security->isGranted(ContaoCorePermissions::USER_CAN_ACCESS_PAGE, $pageId)
@@ -87,7 +88,7 @@ final class EditorController
         // The editor relies on same-origin access. Pages on another domain must be edited
         // on that domain, where the user has their own session.
         if ('' !== $host && strtolower($host) !== strtolower($request->getHost())) {
-            $parameters['other_domain_url'] = ($parts['scheme'] ?? 'https').'://'.$host.$request->getBaseUrl().$request->getPathInfo().'?id='.$pageId;
+            $parameters['other_domain_url'] = ($parts['scheme'] ?? 'https').'://'.$host.$request->getBaseUrl().$request->getPathInfo().'?'.http_build_query(['id' => $pageId, 'element' => $request->query->getInt('element') ?: null]);
         } elseif ('' === $this->previewScript) {
             $parameters['no_preview'] = true;
         } else {
@@ -97,6 +98,22 @@ final class EditorController
         }
 
         return $this->render($parameters);
+    }
+
+    /**
+     * A root page has no content of its own, so it stands for its start page, like in the
+     * front end. Without an ID, the editor opens the start page of the current domain.
+     */
+    private function resolvePage(int $id, string $host): PageModel|null
+    {
+        $pages = $this->framework->getAdapter(PageModel::class);
+        $page = $id ? $pages->findById($id) : ($pages->findPublishedFallbackByHostname($host, ['fallbackToEmpty' => true]) ?? $pages->findPublishedRootPages()?->first());
+
+        if ($page instanceof PageModel && 'root' === $page->type) {
+            return $pages->findFirstPublishedRegularByPid($page->id);
+        }
+
+        return $page instanceof PageModel ? $page : null;
     }
 
     /**

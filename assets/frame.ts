@@ -975,6 +975,16 @@ window.addEventListener('message', (event) => {
     case 'cbe:refresh':
       void refresh(message.id);
       break;
+    case 'cbe:show': {
+      const root = findElement(message.id);
+
+      if (root) {
+        root.scrollIntoView({ block: 'center', behavior: 'instant' });
+        root.focus({ preventScroll: true });
+        toShell({ type: 'cbe:select', id: message.id });
+      }
+      break;
+    }
     case 'cbe:moved':
       finishMove(message.ok);
       placeHandle();

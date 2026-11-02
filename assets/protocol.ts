@@ -30,6 +30,8 @@ export type ToFrame =
   | { type: 'cbe:elements'; elements: FrameElement[] }
   | { type: 'cbe:value'; id: number; field: string; value: unknown }
   | { type: 'cbe:refresh'; id: number }
+  /** Brings an element into view, for example the one opened from the back end. */
+  | { type: 'cbe:show'; id: number }
   | { type: 'cbe:revert'; id: number; field: string; value: unknown }
   | { type: 'cbe:moved'; id: number; ok: boolean };
 

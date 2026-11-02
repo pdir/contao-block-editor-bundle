@@ -1,0 +1,18 @@
+/* Like the other icons of the header, in the color of its text: light and dark theme alike */
+#tmenu .icon-block-editor {
+  margin-bottom: -2px;
+  overflow: hidden;
+  position: relative;
+  text-indent: 38px;
+  white-space: nowrap;
+  width: 16px;
+}
+
+#tmenu .icon-block-editor::before {
+  background: currentColor;
+  content: '';
+  inset: 0;
+  -webkit-mask: url(icon.svg) center / 16px no-repeat;
+  mask: url(icon.svg) center / 16px no-repeat;
+  position: absolute;
+}
