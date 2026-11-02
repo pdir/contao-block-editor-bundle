@@ -5,7 +5,7 @@ import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToSh
 import { readMessage } from './protocol';
 import { createRichEditor, editLink, renderFormatBar, richValue } from './rich-text';
 import { canEditInline } from './rich-text-policy';
-import { findByText } from './text-target';
+import { findByText, wrapTextRun } from './text-target';
 
 const ID_ATTRIBUTE = 'data-be-id';
 const BUDGET_MS = 50;
@@ -109,7 +109,10 @@ function inlineTarget(inline: InlineConfig, root: HTMLElement, shown?: unknown):
   const richTargets = (element?.inline ?? []).filter(({ mode }) => mode === 'rich').map((rich) => inlineTarget(rich, root));
   const value = shown === undefined ? element?.values[inline.field] : shown;
 
-  return findByText(inline.scalar || !base ? root : base, plainText(value), (candidate) => candidate.closest(`[${ID_ATTRIBUTE}]`) === root && !richTargets.some((target) => target?.contains(candidate)));
+  const scope = inline.scalar || !base ? root : base;
+  const accepts = (candidate: HTMLElement): boolean => candidate.closest(`[${ID_ATTRIBUTE}]`) === root && !richTargets.some((target) => target?.contains(candidate));
+
+  return findByText(scope, plainText(value), accepts) ?? wrapTextRun(scope, plainText(value), accepts);
 }
 
 /** The part under the pointer, otherwise the element's main text. */
@@ -118,7 +121,13 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
   const riches = element.inline.filter(({ mode }) => mode === 'rich');
   const plain = plains.find(({ section }) => !section);
   const plainTarget = plain ? inlineTarget(plain, root) : null;
-  const clicked = hit instanceof Node ? [...plains, ...riches].find((inline) => inlineTarget(inline, root)?.contains(hit)) : null;
+  // The innermost one: a headline can hold another field, such as its highlighted part
+  const clicked = hit instanceof Node
+    ? [...plains, ...riches]
+      .map((inline) => ({ inline, target: inlineTarget(inline, root) }))
+      .filter(({ target }) => target?.contains(hit))
+      .sort((a, b) => (a.target?.contains(b.target as Node) ? 1 : -1))[0]?.inline
+    : null;
 
   if (clicked) {
     return clicked;
@@ -896,6 +905,13 @@ function applyElements(elements: FrameElement[]): void {
 function prepareRoot(root: HTMLElement): void {
   root.classList.add('cbe-editable');
   root.tabIndex = 0;
+
+  // Gives bare text its tag now, so that already the first click hits it
+  for (const inline of known.get(Number(root.getAttribute(ID_ATTRIBUTE)))?.inline ?? []) {
+    if (inline.mode === 'plain' && !inline.section) {
+      inlineTarget(inline, root);
+    }
+  }
 }
 
 async function refresh(id: number): Promise<void> {
