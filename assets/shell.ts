@@ -937,6 +937,7 @@ function openPicker(id: number, value: string, done: (value: string | null) => v
   url.searchParams.set('popup', '1');
 
   pickerChoice = null;
+  pickerApply.disabled = false;
   pickerFrame.src = url.href;
   pickerDialog.showModal();
 }
@@ -960,7 +961,20 @@ function readPickerChoice(): string | null {
   }
 }
 
-pickerDialog.querySelector('[data-picker-apply]')?.addEventListener('click', () => {
+const pickerApply = pickerDialog.querySelector('[data-picker-apply]') as HTMLButtonElement;
+
+// Contao's picker page switches the apply button of its own modal through the parent document,
+// with MooTools. It is off for views without anything to choose, such as a folder of news archives.
+(document as Document & { getElements?: unknown }).getElements = (selector: string) => {
+  const isApply = selector === '.simple-modal-footer a.primary';
+
+  return {
+    addClass: () => { if (isApply) pickerApply.disabled = true; },
+    removeClass: () => { if (isApply) pickerApply.disabled = false; },
+  };
+};
+
+pickerApply.addEventListener('click', () => {
   pickerChoice = readPickerChoice();
   pickerDialog.close();
 });

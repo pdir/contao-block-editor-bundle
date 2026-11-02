@@ -680,6 +680,11 @@ body {
   color: var(--cbe-on-accent);
 }
 
+.cbe-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
 /* Help */
 .cbe-help {
   color: var(--cbe-muted);
