@@ -670,8 +670,28 @@ document.addEventListener('pointermove', ({ clientX, clientY }) => {
   pointerY = clientY;
 }, { passive: true });
 
+/** Spare room for the frame of an element, which is drawn outside of it. */
+const OUTLINE_ROOM = 4;
+
+/**
+ * A frame outside of an element as wide as the page would lie beyond the edges, where many
+ * themes cut off anything (overflow-x: clip). Such elements get it drawn inside.
+ */
+function placeOutlines(target: EventTarget | null): void {
+  const width = document.documentElement.clientWidth;
+
+  for (let root = target instanceof Element ? target.closest<HTMLElement>('.cbe-editable') : null; root; root = root.parentElement?.closest<HTMLElement>('.cbe-editable') ?? null) {
+    const { left, right } = root.getBoundingClientRect();
+    root.classList.toggle('cbe-editable--inset', left < OUTLINE_ROOM || right > width - OUTLINE_ROOM);
+  }
+}
+
+document.addEventListener('focusin', ({ target }) => placeOutlines(target));
+
 document.addEventListener('pointerover', (event) => {
   const root = closestId(event.target)?.root;
+
+  placeOutlines(event.target);
 
   pointerX = event.clientX;
   pointerY = event.clientY;

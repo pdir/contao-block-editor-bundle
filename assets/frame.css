@@ -9,6 +9,11 @@
   outline-offset: 2px;
 }
 
+/* As wide as the page: drawn inside, see placeOutlines() */
+.cbe-editable.cbe-editable--inset {
+  outline-offset: -2px;
+}
+
 .cbe-editable:hover {
   outline: 2px solid rgb(244 124 0 / 50%);
 }
