@@ -346,11 +346,21 @@ body {
   white-space: nowrap;
 }
 
-/* Focus also covers the keyboard and touch screens, which have no hover */
-.cbe-description:hover,
-.cbe-field:focus-within .cbe-description {
-  overflow: visible;
-  white-space: normal;
+/* Beside the inspector: it neither moves nor covers the fields */
+.cbe-tooltip {
+  background: var(--cbe-bg);
+  border-radius: 10px;
+  box-shadow: var(--cbe-sheet-shadow);
+  color: var(--cbe-text);
+  font-size: 12px;
+  line-height: 1.4;
+  margin: 0;
+  max-width: calc(100vw - 16px);
+  padding: 8px 10px;
+  pointer-events: none;
+  position: fixed;
+  width: 280px;
+  z-index: 10;
 }
 
 .cbe-field {

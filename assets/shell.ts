@@ -555,8 +555,47 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
   return wrapper;
 }
 
+const tooltip = document.createElement('p');
+tooltip.className = 'cbe-tooltip';
+tooltip.hidden = true;
+document.body.append(tooltip);
+
+/** The full text of a description, next to its line. */
+function updateTooltip(hit: EventTarget | null = null): void {
+  const hovered = hit instanceof Element ? hit.closest('.cbe-description') : null;
+  // Focus also covers the keyboard and touch screens, which have no hover
+  const line = hovered ?? document.activeElement?.closest('.cbe-field')?.querySelector('.cbe-description');
+
+  tooltip.hidden = !line;
+
+  if (!line) {
+    return;
+  }
+
+  tooltip.textContent = line.textContent;
+
+  const gap = 8;
+  const panel = inspector.getBoundingClientRect();
+  const { top } = line.getBoundingClientRect();
+  const beside = panel.left - tooltip.offsetWidth - gap;
+  const height = tooltip.offsetHeight;
+
+  // On small screens the inspector is below the page, so there is only room above it
+  tooltip.style.left = `${beside >= gap ? beside : gap}px`;
+  tooltip.style.top = `${beside >= gap
+    ? Math.max(gap, Math.min(top, window.innerHeight - height - gap))
+    : Math.max(gap, panel.top - height - gap)}px`;
+}
+
+inspector.addEventListener('pointerover', ({ target }) => updateTooltip(target));
+inspector.addEventListener('pointerleave', () => updateTooltip());
+inspector.addEventListener('focusin', () => updateTooltip());
+inspector.addEventListener('focusout', () => queueMicrotask(() => updateTooltip()));
+inspector.addEventListener('scroll', () => updateTooltip(), { passive: true });
+
 function renderInspector(): void {
   inspector.replaceChildren();
+  tooltip.hidden = true;
   fieldSync.clear();
 
   const element = selected === null ? undefined : elements.get(selected);
@@ -743,6 +782,7 @@ const inspectorToggle = document.getElementById('cbe-inspector-toggle') as HTMLB
 
 function showInspector(visible: boolean): void {
   inspector.hidden = !visible;
+  tooltip.hidden = true;
   inspectorToggle.setAttribute('aria-pressed', String(visible));
 }
 
