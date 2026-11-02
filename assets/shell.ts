@@ -18,6 +18,8 @@ interface FieldSchema {
 }
 
 interface TypeSchema {
+  /** Only missing in a schema cached by an older version. */
+  label?: string;
   fields: FieldSchema[];
   inline: InlineConfig[];
   /** Only for elements in an accordion, which is a matter of the record and not of the type. */
@@ -627,7 +629,8 @@ function renderInspector(): void {
   }
 
   const heading = document.createElement('h2');
-  heading.textContent = element.type;
+  heading.textContent = schema[element.type]?.label ?? element.type;
+  heading.title = element.type;
   inspector.append(heading);
 
   for (const field of fieldsOf(element)) {

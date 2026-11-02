@@ -129,7 +129,12 @@ final class ElementInspector
                 }
             }
 
-            $schema[$type] = ['fields' => $fields, 'inline' => self::inlineFields($type, array_column($fields, 'name'))];
+            $schema[$type] = [
+                // The name editors know from the back end, which bundles provide for their own types
+                'label' => self::typeLabel($type),
+                'fields' => $fields,
+                'inline' => self::inlineFields($type, array_column($fields, 'name')),
+            ];
 
             // Whether it applies depends on the parent of the record, not on the type
             $config = $GLOBALS['TL_DCA'][self::TABLE]['fields'][self::SECTION_FIELD] ?? null;
@@ -140,6 +145,14 @@ final class ElementInspector
         }
 
         return $schema;
+    }
+
+    public static function typeLabel(string $type): string
+    {
+        $label = $GLOBALS['TL_LANG']['CTE'][$type] ?? null;
+        $label = \is_array($label) ? ($label[0] ?? null) : $label;
+
+        return \is_string($label) && '' !== trim($label) ? $label : $type;
     }
 
     /**

@@ -54,6 +54,18 @@ final class ElementInspectorTest extends TestCase
         self::assertSame(['text'], $fields);
     }
 
+    public function testTypeIsNamedLikeInTheBackEnd(): void
+    {
+        $GLOBALS['TL_LANG']['CTE'] = ['text' => ['Text', 'Ein Textelement'], 'empty' => ['', ''], 'plain' => 'Einfach'];
+
+        self::assertSame('Text', ElementInspector::typeLabel('text'));
+        self::assertSame('Einfach', ElementInspector::typeLabel('plain'));
+        self::assertSame('empty', ElementInspector::typeLabel('empty'));
+        self::assertSame('creuva_hero', ElementInspector::typeLabel('creuva_hero'));
+
+        unset($GLOBALS['TL_LANG']);
+    }
+
     private function inspector(string $parentType, Connection|null $connection = null): ElementInspector
     {
         if (!$connection) {
