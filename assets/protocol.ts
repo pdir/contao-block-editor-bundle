@@ -5,6 +5,8 @@ export interface InlineConfig {
   field: string;
   selector: string | null;
   mode: 'rich' | 'plain';
+  /** The headline of the accordion section around the element, which is outside of its root. */
+  section?: boolean;
 }
 
 export interface FrameElement {

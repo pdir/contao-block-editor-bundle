@@ -38,6 +38,12 @@ final class ElementInspector
     /** Most elements render their headline as a direct child of the root tag. */
     private const HEADLINE_SELECTOR = ':scope > :is(h1, h2, h3, h4, h5, h6)';
 
+    /** The headline of an accordion section belongs to the element inside of the section. */
+    private const SECTION_FIELD = 'sectionHeadline';
+
+    /** @var array<int, string> */
+    private array $parentTypes = [];
+
     public function __construct(
         private readonly ContaoFramework $framework,
         private readonly Connection $connection,
@@ -124,6 +130,13 @@ final class ElementInspector
             }
 
             $schema[$type] = ['fields' => $fields, 'inline' => self::inlineFields($type, array_column($fields, 'name'))];
+
+            // Whether it applies depends on the parent of the record, not on the type
+            $config = $GLOBALS['TL_DCA'][self::TABLE]['fields'][self::SECTION_FIELD] ?? null;
+
+            if (\is_array($config) && $this->fieldPolicy->isSupported(self::SECTION_FIELD, $config) && $this->fieldPolicy->canEdit(self::TABLE, self::SECTION_FIELD) && ($section = $this->describeField(self::SECTION_FIELD, $dc))) {
+                $schema[$type]['section'] = $section;
+            }
         }
 
         return $schema;
@@ -174,8 +187,14 @@ final class ElementInspector
         }
 
         $fields = [];
+        $paletteFields = FieldPolicy::paletteFields($palette);
 
-        foreach (FieldPolicy::paletteFields($palette) as $field) {
+        // Core adds it in an onpalette callback (AccordionListener), which only the back end runs
+        if ($this->isInAccordion($row)) {
+            $paletteFields[] = self::SECTION_FIELD;
+        }
+
+        foreach ($paletteFields as $field) {
             $config = $dca['fields'][$field] ?? null;
 
             if (\is_array($config) && $this->fieldPolicy->isSupported($field, $config) && $this->fieldPolicy->canEdit(self::TABLE, $field)) {
@@ -184,6 +203,18 @@ final class ElementInspector
         }
 
         return $fields;
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function isInAccordion(array $row): bool
+    {
+        if ('tl_content' !== ($row['ptable'] ?? null) || !($pid = (int) ($row['pid'] ?? 0))) {
+            return false;
+        }
+
+        return 'accordion' === ($this->parentTypes[$pid] ??= (string) $this->connection->fetchOne('SELECT type FROM tl_content WHERE id = ?', [$pid]));
     }
 
     /**

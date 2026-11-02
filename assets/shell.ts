@@ -20,6 +20,8 @@ interface FieldSchema {
 interface TypeSchema {
   fields: FieldSchema[];
   inline: InlineConfig[];
+  /** Only for elements in an accordion, which is a matter of the record and not of the type. */
+  section?: FieldSchema;
 }
 
 interface Element {
@@ -63,6 +65,22 @@ const typedInPage = new Set<string>();
 const sideEffects = new Set<string>();
 /** Keeps the inspector in sync with what is typed in the page. */
 const fieldSync = new Map<string, (value: unknown) => void>();
+
+function hasSection(element: Element): boolean {
+  return 'sectionHeadline' in element.values && Boolean(schema[element.type]?.section);
+}
+
+function inlineOf(element: Element): InlineConfig[] {
+  const inline = schema[element.type]?.inline ?? [];
+
+  return hasSection(element) ? [...inline, { field: 'sectionHeadline', selector: null, mode: 'plain', section: true }] : inline;
+}
+
+function fieldsOf(element: Element): FieldSchema[] {
+  const fields = schema[element.type]?.fields ?? [];
+
+  return hasSection(element) ? [schema[element.type].section as FieldSchema, ...fields] : fields;
+}
 
 function renderAwaited(): void {
   for (const id of awaitingRender) {
@@ -151,7 +169,7 @@ const queue = new SaveQueue(send, {
 
     changedFields.forEach((field) => sideEffects.add(field));
 
-    for (const { field } of schema[element.type]?.inline ?? []) {
+    for (const { field } of inlineOf(element)) {
       if (field in values) {
         post({ type: 'cbe:value', id, field, value: values[field] });
       }
@@ -375,7 +393,7 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
   const frameElements: FrameElement[] = [...elements.values()]
     .filter((element) => element.editable)
     .map((element) => {
-      const inline = schema[element.type]?.inline ?? [];
+      const inline = inlineOf(element);
 
       return { id: element.id, inline, values: Object.fromEntries(inline.map(({ field }) => [field, element.values[field]])) };
     });
@@ -557,7 +575,7 @@ function renderInspector(): void {
   heading.textContent = element.type;
   inspector.append(heading);
 
-  for (const field of schema[element.type]?.fields ?? []) {
+  for (const field of fieldsOf(element)) {
     inspector.append(createField(element, field));
   }
 

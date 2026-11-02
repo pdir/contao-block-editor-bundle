@@ -27,6 +27,8 @@ interface Session {
   editor?: Editor;
   cleanup(): void;
   showValue(): void;
+  /** Runs last, when the content of the target is final. */
+  restore?(): void;
 }
 
 let session: Session | null = null;
@@ -46,18 +48,50 @@ function snapshot(element: FrameElement, inline: InlineConfig, target: HTMLEleme
   };
 }
 
+/** The button with the headline of the accordion section around an element. */
+function sectionButton(root: HTMLElement): HTMLElement | null {
+  const header = root.closest('.handorgel__content')?.previousElementSibling;
+
+  return header?.querySelector<HTMLElement>('.handorgel__header__button') ?? null;
+}
+
+/** The element whose section headline this is: the headline itself is outside of all elements. */
+function sectionOwner(hit: EventTarget | null): { id: number; root: HTMLElement } | null {
+  const button = hit instanceof Element ? hit.closest('.handorgel__header__button') : null;
+  const child = button?.closest('.handorgel__header')?.nextElementSibling?.querySelector(`[${ID_ATTRIBUTE}]`);
+  const owner = child ? closestId(child) : null;
+
+  return owner && known.get(owner.id)?.inline.some(({ section }) => section) ? owner : null;
+}
+
+/** The button is as wide as the accordion: only its text edits, the rest still folds. */
+function isOnText(button: Element, x: number, y: number): boolean {
+  const range = document.createRange();
+  range.selectNodeContents(button);
+
+  const rects = Array.from(range.getClientRects());
+
+  return rects.length === 0 || rects.some(({ left, right, top, bottom }) => x >= left && x <= right && y >= top && y <= bottom);
+}
+
 function inlineTarget(inline: InlineConfig, root: HTMLElement): HTMLElement | null {
+  if (inline.section) {
+    return sectionButton(root);
+  }
+
   return inline.selector ? root.querySelector<HTMLElement>(inline.selector) : root;
 }
 
 /** The part under the pointer, otherwise the element's main text. */
 function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget | null): InlineConfig | null {
-  const plain = element.inline.find(({ mode }) => mode === 'plain');
+  const plains = element.inline.filter(({ mode }) => mode === 'plain');
   const rich = element.inline.find(({ mode }) => mode === 'rich');
+  const plain = plains.find(({ section }) => !section);
   const plainTarget = plain ? inlineTarget(plain, root) : null;
+  const clicked = hit instanceof Node ? plains.find((inline) => inlineTarget(inline, root)?.contains(hit)) : null;
 
-  if (plain && plainTarget && hit instanceof Node && plainTarget.contains(hit)) {
-    return plain;
+  if (clicked) {
+    return clicked;
   }
 
   if (rich) {
@@ -189,9 +223,9 @@ function placeCaret(x: number, y: number): void {
 }
 
 function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
-  const target = inlineTarget(inline, root);
+  const button = inlineTarget(inline, root);
 
-  if (!target) {
+  if (!button) {
     return false;
   }
 
@@ -202,6 +236,21 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
   }
 
   const stored = element.values[field] as { value?: string; unit?: string } | null;
+  // Browsers can't edit inside of a button reliably, and the accordion listens to its keys and
+  // clicks. So a stand-in takes its place for the time being, which looks the same.
+  const target = inline.section ? document.createElement('div') : button;
+
+  if (inline.section) {
+    target.className = button.className;
+    target.style.cursor = 'text';
+    target.style.outline = '2px solid #f47c00';
+    target.style.outlineOffset = '-2px';
+    target.append(...Array.from(button.childNodes));
+    button.replaceWith(target);
+    // Closed, its content would stay out of sight during the edit
+    (target.parentElement as (Element & { handorgelFold?: { open(): void } }) | null)?.handorgelFold?.open();
+  }
+
   const state = snapshot(element, inline, target);
 
   target.textContent = decodeEntities(stored?.value ?? '');
@@ -245,6 +294,10 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
     },
     // The text is in place already, as it was typed
     showValue() {},
+    restore: inline.section ? () => {
+      button.replaceChildren(...Array.from(target.childNodes));
+      target.replaceWith(button);
+    } : undefined,
   };
 
   return true;
@@ -271,6 +324,7 @@ function endSession(): void {
     target.replaceChildren(...rendered);
   }
 
+  session.restore?.();
   session = null;
 
   // Insert tags can only be resolved by the server, and only after the save is through
@@ -600,11 +654,13 @@ document.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  const hit = closestId(event.target);
-
   if (session && event.target instanceof Node && session.target.contains(event.target)) {
     return;
   }
+
+  const owner = sectionOwner(event.target);
+  const onSectionText = owner && event.target instanceof Element && isOnText(event.target, event.clientX, event.clientY);
+  const hit = onSectionText ? owner : closestId(event.target);
 
   endSession();
 
@@ -754,8 +810,14 @@ async function refresh(id: number): Promise<void> {
 
   if (fresh && current) {
     const replacement = document.importNode(fresh, true);
+    const freshHeadline = known.get(id)?.inline.some(({ section }) => section) ? sectionButton(fresh) : null;
+
     current.replaceWith(replacement);
     prepareRoot(replacement);
+
+    if (freshHeadline) {
+      sectionButton(replacement)?.replaceChildren(...Array.from(freshHeadline.childNodes, (node) => document.importNode(node, true)));
+    }
   }
 }
 
