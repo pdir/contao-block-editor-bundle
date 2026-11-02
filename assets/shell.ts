@@ -4,7 +4,7 @@ import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
-import { applyInspector, applyViewport, storedInspector, storedViewport, type Viewport } from './settings';
+import { applyCorners, applyInspector, applyViewport, storedInspector, storedRoundCorners, storedViewport, type Viewport } from './settings';
 
 interface FieldSchema {
   name: string;
@@ -702,6 +702,7 @@ function renderInspector(): void {
 
     if (help) {
       inspector.append(help.content.cloneNode(true));
+      bindCornerSetting();
     }
 
     return;
@@ -736,6 +737,7 @@ window.addEventListener('message', (event) => {
       }
 
       currentLoad = message.load;
+      showCorners(storedRoundCorners());
       resetPage();
       showPage(message.page);
       loadElements(message.ids.filter(Number.isInteger), message.load, message.page).catch((error: Error) => setStatus(error.message, true));
@@ -869,6 +871,30 @@ function showInspector(visible: boolean, store = false): void {
 inspectorToggle.addEventListener('click', () => showInspector(Boolean(inspector.hidden), true));
 
 showInspector(storedInspector());
+
+/** The page in the preview is same-origin, so its root gets the attribute directly. */
+function showCorners(round: boolean, store = false): void {
+  applyCorners(root, round, store);
+
+  try {
+    const page = frame.contentDocument?.documentElement;
+
+    if (page) {
+      applyCorners(page, round);
+    }
+  } catch {
+    // Not loaded yet: the next cbe:ready applies it
+  }
+}
+
+function bindCornerSetting(): void {
+  const corners = inspector.querySelector<HTMLInputElement>('[data-setting="corners"]');
+
+  if (corners) {
+    corners.checked = storedRoundCorners();
+    corners.addEventListener('change', () => showCorners(corners.checked, true));
+  }
+}
 
 window.history.replaceState({ frame: frame.src }, '');
 

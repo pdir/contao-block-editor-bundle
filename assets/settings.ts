@@ -1,6 +1,6 @@
-// Choices of the editor that outlast the session: the width of the preview and whether the
-// inspector shows. They are only conveniences, so without storage a choice lasts until the
-// next reload.
+// Choices of the editor that outlast the session: the width of the preview, whether the
+// inspector shows and whether corners are rounded. They are only conveniences, so without
+// storage a choice lasts until the next reload.
 
 export const VIEWPORTS = ['desktop', 'tablet', 'mobile'] as const;
 
@@ -8,6 +8,7 @@ export type Viewport = (typeof VIEWPORTS)[number];
 
 const VIEWPORT_KEY = 'cbe-viewport';
 const INSPECTOR_KEY = 'cbe-inspector';
+const CORNERS_KEY = 'cbe-corners';
 
 function read(key: string): string | null {
   try {
@@ -35,6 +36,10 @@ export function storedInspector(): boolean {
   return read(INSPECTOR_KEY) !== 'hidden';
 }
 
+export function storedRoundCorners(): boolean {
+  return read(CORNERS_KEY) !== 'square';
+}
+
 /**
  * The layout follows these attributes on the root element, so they can be set before the
  * first paint, without waiting for the module scripts.
@@ -52,5 +57,18 @@ export function applyInspector(root: HTMLElement, visible: boolean, store = fals
 
   if (store) {
     write(INSPECTOR_KEY, visible ? 'visible' : 'hidden');
+  }
+}
+
+/** Also set on the page in the preview, where the drag handle and the bars follow it. */
+export function applyCorners(root: HTMLElement, round: boolean, store = false): void {
+  if (round) {
+    delete root.dataset.cbeCorners;
+  } else {
+    root.dataset.cbeCorners = 'square';
+  }
+
+  if (store) {
+    write(CORNERS_KEY, round ? 'round' : 'square');
   }
 }

@@ -20,6 +20,11 @@
   --cbe-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Square corners, chosen in the help of the inspector: every radius is scaled by --cbe-round */
+:root[data-cbe-corners='square'] {
+  --cbe-round: 0;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --cbe-bg: #1c1c1e;
@@ -157,7 +162,7 @@ body {
 }
 
 .cbe-link {
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cbe-round, 1));
   color: var(--cbe-accent);
   text-decoration: none;
 }
@@ -209,7 +214,7 @@ body {
 .cbe-frame {
   background: #fff;
   border: 0;
-  border-radius: 10px;
+  border-radius: calc(10px * var(--cbe-round, 1));
   box-shadow: var(--cbe-sheet-shadow);
   flex: 1;
   margin: 0 8px 8px;
@@ -224,12 +229,12 @@ body {
 }
 
 :root[data-cbe-viewport='tablet'] .cbe-frame {
-  border-radius: 14px;
+  border-radius: calc(14px * var(--cbe-round, 1));
   width: 768px;
 }
 
 :root[data-cbe-viewport='mobile'] .cbe-frame {
-  border-radius: 22px;
+  border-radius: calc(22px * var(--cbe-round, 1));
   width: 375px;
 }
 
@@ -242,7 +247,7 @@ body {
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--cbe-round, 1));
   color: var(--cbe-muted);
   cursor: pointer;
   display: flex;
@@ -269,7 +274,7 @@ body {
 /* A segmented control: the thumb travels to the chosen width */
 .cbe-viewports {
   background: var(--cbe-fill);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cbe-round, 1));
   display: grid;
   flex: none;
   grid-template-columns: repeat(3, 66px);
@@ -279,7 +284,7 @@ body {
 
 .cbe-viewports::before {
   background: var(--cbe-thumb);
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cbe-round, 1));
   bottom: 2px;
   box-shadow: var(--cbe-thumb-shadow);
   content: '';
@@ -301,7 +306,7 @@ body {
 .cbe-viewport {
   background: none;
   border: 0;
-  border-radius: 6px;
+  border-radius: calc(6px * var(--cbe-round, 1));
   color: var(--cbe-muted);
   cursor: pointer;
   font: inherit;
@@ -372,7 +377,7 @@ body {
 /* Beside the inspector: it neither moves nor covers the fields */
 .cbe-tooltip {
   background: var(--cbe-bg);
-  border-radius: 10px;
+  border-radius: calc(10px * var(--cbe-round, 1));
   box-shadow: var(--cbe-sheet-shadow);
   color: var(--cbe-text);
   font-size: 12px;
@@ -408,7 +413,7 @@ body {
 .cbe-field textarea {
   background: var(--cbe-control);
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--cbe-round, 1));
   box-shadow: inset 0 0 0 0.5px var(--cbe-control-line), 0 0.5px 1px rgb(0 0 0 / 6%);
   color: inherit;
   display: block;
@@ -465,7 +470,7 @@ body {
 .cbe-field > input[type='checkbox'] {
   appearance: none;
   background: var(--cbe-fill-strong);
-  border-radius: 11px;
+  border-radius: calc(11px * var(--cbe-round, 1));
   box-shadow: inset 0 0 0 1px var(--cbe-control-line);
   cursor: pointer;
   height: 22px;
@@ -476,7 +481,7 @@ body {
 
 .cbe-field > input[type='checkbox']::after {
   background: #fff;
-  border-radius: 50%;
+  border-radius: calc(9px * var(--cbe-round, 1));
   box-shadow: 0 1px 3px rgb(0 0 0 / 30%);
   content: '';
   height: 18px;
@@ -535,7 +540,7 @@ body {
 
 .cbe-notice {
   background: var(--cbe-bg);
-  border-radius: 14px;
+  border-radius: calc(14px * var(--cbe-round, 1));
   box-shadow: var(--cbe-sheet-shadow);
   font-size: 14px;
   line-height: 1.5;
@@ -602,7 +607,7 @@ body {
 
 .cbe-rich__text .ProseMirror {
   background: var(--cbe-control);
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cbe-round, 1));
   box-shadow: inset 0 0 0 1px var(--cbe-control-line);
   max-height: 320px;
   min-height: 120px;
@@ -624,7 +629,7 @@ body {
 .cbe-rich__toggle {
   background: none;
   border: 0;
-  border-radius: 7px;
+  border-radius: calc(7px * var(--cbe-round, 1));
   color: var(--cbe-muted);
   cursor: pointer;
   display: flex;
@@ -642,7 +647,7 @@ body {
 .cbe-picker {
   background: var(--cbe-bg);
   border: 0;
-  border-radius: 14px;
+  border-radius: calc(14px * var(--cbe-round, 1));
   box-shadow: var(--cbe-sheet-shadow);
   color: var(--cbe-text);
   display: none;
@@ -668,7 +673,7 @@ body {
 
 .cbe-picker__frame {
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cbe-round, 1));
   box-shadow: 0 0 0 1px var(--cbe-border);
   flex: 1;
   width: 100%;
@@ -683,7 +688,7 @@ body {
 .cbe-button {
   background: var(--cbe-fill);
   border: 0;
-  border-radius: 8px;
+  border-radius: calc(8px * var(--cbe-round, 1));
   color: var(--cbe-text);
   cursor: pointer;
   font: inherit;
@@ -740,7 +745,7 @@ body {
 
 .cbe-help kbd {
   background: var(--cbe-control);
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cbe-round, 1));
   box-shadow: 0 0 0 0.5px var(--cbe-control-line), 0 1px 0 var(--cbe-control-line);
   color: var(--cbe-text);
   font-family: inherit;
@@ -752,10 +757,22 @@ body {
 }
 
 .cbe-help-more summary {
-  border-radius: 4px;
+  border-radius: calc(4px * var(--cbe-round, 1));
   color: var(--cbe-accent);
   cursor: pointer;
   font-weight: 500;
+}
+
+.cbe-help-settings {
+  border-top: 0.5px solid var(--cbe-border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+
+.cbe-help-settings .cbe-field {
+  color: var(--cbe-text);
+  font-size: 13px;
+  margin-bottom: 0;
 }
 
 .cbe-help-handle {
