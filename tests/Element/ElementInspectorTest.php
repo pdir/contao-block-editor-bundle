@@ -84,4 +84,14 @@ final class ElementInspectorTest extends TestCase
             $this->createMock(RouterInterface::class),
         );
     }
+
+    public function testNewsAndEventsAreOnlySupportedWithTheVoterOfTheirBundle(): void
+    {
+        $ptables = ElementInspector::supportedPtables();
+
+        $this->assertContains('tl_article', $ptables);
+        $this->assertContains('tl_content', $ptables);
+        $this->assertSame(class_exists('Contao\\NewsBundle\\Security\\Voter\\NewsContentVoter'), \in_array('tl_news', $ptables, true));
+        $this->assertSame(class_exists('Contao\\CalendarBundle\\Security\\Voter\\CalendarContentVoter'), \in_array('tl_calendar_events', $ptables, true));
+    }
 }

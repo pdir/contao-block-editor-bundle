@@ -29,8 +29,20 @@ final class ElementInspector
     public const TABLE = 'tl_content';
     public const MAX_IDS = 1000;
 
-    /** Parents the editor can link back to. Other parents stay read-only for now. */
-    public const SUPPORTED_PTABLES = ['tl_article', 'tl_content'];
+    /**
+     * Where content elements can live, with the back end module that edits them. Contao's
+     * voter for the parent decides about the permissions: news and events are only supported
+     * if their bundle with its voter is installed, so no check can go missing. Other parents
+     * stay read-only.
+     */
+    private const PARENTS = [
+        'tl_article' => ['module' => 'article', 'voter' => null],
+        'tl_news' => ['module' => 'news', 'voter' => 'Contao\\NewsBundle\\Security\\Voter\\NewsContentVoter'],
+        'tl_calendar_events' => ['module' => 'calendar', 'voter' => 'Contao\\CalendarBundle\\Security\\Voter\\CalendarContentVoter'],
+    ];
+
+    /** Elements nested in elements, e.g. in an accordion. */
+    private const MAX_DEPTH = 32;
 
     /** Rich-text fields that can be edited in place. */
     private const INLINE_RICH = ['text' => ['field' => 'text', 'selector' => '.rte', 'mode' => 'rich']];
@@ -64,7 +76,7 @@ final class ElementInspector
 
         $rows = $this->connection->fetchAllAssociative(
             'SELECT * FROM tl_content WHERE id IN (?) AND ptable IN (?)',
-            [$ids, self::SUPPORTED_PTABLES],
+            [$ids, self::supportedPtables()],
             [ArrayParameterType::INTEGER, ArrayParameterType::STRING],
         );
 
@@ -92,11 +104,7 @@ final class ElementInspector
                 'editable' => $editable,
                 'revision' => self::revision($row),
                 'values' => (object) $values,
-                'classicUrl' => $this->router->generate(
-                    'contao_backend',
-                    ['do' => 'article', 'table' => self::TABLE, 'act' => 'edit', 'id' => $id],
-                    UrlGeneratorInterface::ABSOLUTE_PATH,
-                ),
+                'classicUrl' => $this->classicUrl($row),
             ];
         }
 
@@ -236,6 +244,58 @@ final class ElementInspector
      *
      * @param array<string, mixed> $row
      */
+    /**
+     * @return list<string>
+     */
+    public static function supportedPtables(): array
+    {
+        $ptables = ['tl_content'];
+
+        foreach (self::PARENTS as $table => ['voter' => $voter]) {
+            if (null === $voter || class_exists($voter)) {
+                $ptables[] = $table;
+            }
+        }
+
+        return $ptables;
+    }
+
+    /**
+     * The element in the back end: news elements are edited in the news module, for example.
+     *
+     * @param array<string, mixed> $row
+     */
+    public function classicUrl(array $row, int $referenceType = UrlGeneratorInterface::ABSOLUTE_PATH): string
+    {
+        return $this->router->generate(
+            'contao_backend',
+            ['do' => $this->backendModule($row), 'table' => self::TABLE, 'act' => 'edit', 'id' => (int) $row['id']],
+            $referenceType,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function backendModule(array $row): string
+    {
+        $ptable = (string) ($row['ptable'] ?? '');
+        $pid = (int) ($row['pid'] ?? 0);
+
+        // Nested elements belong to the module of the outermost one
+        for ($depth = 0; 'tl_content' === $ptable && $depth < self::MAX_DEPTH; ++$depth) {
+            $parent = $this->connection->fetchAssociative('SELECT pid, ptable FROM tl_content WHERE id = ?', [$pid]);
+
+            if (false === $parent) {
+                break;
+            }
+
+            [$ptable, $pid] = [(string) $parent['ptable'], (int) $parent['pid']];
+        }
+
+        return self::PARENTS[$ptable]['module'] ?? 'article';
+    }
+
     public static function revision(array $row): string
     {
         return hash('xxh128', serialize($row));

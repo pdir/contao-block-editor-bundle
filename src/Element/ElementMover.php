@@ -187,7 +187,7 @@ final class ElementMover
     {
         $row = $this->connection->fetchAssociative('SELECT * FROM tl_content WHERE id = ? FOR UPDATE', [$id]);
 
-        if (false === $row || !\in_array($row['ptable'], ElementInspector::SUPPORTED_PTABLES, true)) {
+        if (false === $row || !\in_array($row['ptable'], ElementInspector::supportedPtables(), true)) {
             throw new ApiException(404, 'Das Element wurde nicht gefunden.');
         }
 

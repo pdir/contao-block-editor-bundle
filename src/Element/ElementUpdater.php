@@ -15,7 +15,6 @@ use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\HttpFoundation\RequestStack;
-use Symfony\Component\Routing\RouterInterface;
 
 /**
  * The only write path of the editor. It follows DC_Table's order of operations:
@@ -31,7 +30,6 @@ final class ElementUpdater
         private readonly Connection $connection,
         private readonly Security $security,
         private readonly ElementInspector $inspector,
-        private readonly RouterInterface $router,
         private readonly RequestStack $requestStack,
         private readonly LoggerInterface $logger,
         private readonly RecordWriter $writer,
@@ -75,7 +73,7 @@ final class ElementUpdater
         // Lock the record, so that the revision check and the update are atomic
         $row = $this->connection->fetchAssociative('SELECT * FROM tl_content WHERE id = ? FOR UPDATE', [$id]);
 
-        if (false === $row || !\in_array($row['ptable'], ElementInspector::SUPPORTED_PTABLES, true)) {
+        if (false === $row || !\in_array($row['ptable'], ElementInspector::supportedPtables(), true)) {
             throw new ApiException(404, 'Das Element wurde nicht gefunden.');
         }
 
@@ -142,7 +140,7 @@ final class ElementUpdater
         $this->denyUnlessGranted(new UpdateAction(self::TABLE, $row, $submit));
 
         $versions = new Versions(self::TABLE, $id);
-        $versions->setEditUrl($this->router->generate('contao_backend', ['do' => 'article', 'table' => self::TABLE, 'act' => 'edit', 'id' => $id]));
+        $versions->setEditUrl($this->inspector->classicUrl($row));
         $versions->initialize();
 
         $this->connection->update(
