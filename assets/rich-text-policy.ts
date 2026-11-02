@@ -8,6 +8,18 @@ const ALLOWED_ATTRIBUTES: Record<string, string[]> = {
   A: ['href', 'target', 'rel', 'title'],
 };
 
+/** Markup that extensions of other bundles write, see rich-text.ts. */
+function extraAttributes(tag: string): string[] | undefined {
+  const addons = typeof window === 'undefined' ? undefined : (window as { contaoBlockEditorExtensions?: { allow?: Record<string, string[]> }[] }).contaoBlockEditorExtensions;
+  const allowed = Array.isArray(addons) ? addons.flatMap((addon) => {
+    const attributes = addon?.allow?.[tag] ?? addon?.allow?.[tag.toLowerCase()];
+
+    return Array.isArray(attributes) ? [attributes.map(String)] : [];
+  }) : [];
+
+  return allowed.length ? allowed.flat() : undefined;
+}
+
 /** Parsed in an inert document: no scripts run and no resources load. */
 export function canEditInline(html: string): boolean {
   const { head, body } = new DOMParser().parseFromString(html, 'text/html');
@@ -18,7 +30,8 @@ export function canEditInline(html: string): boolean {
   }
 
   for (const element of Array.from(body.querySelectorAll('*'))) {
-    const allowed = ALLOWED_ATTRIBUTES[element.tagName];
+    const extra = extraAttributes(element.tagName);
+    const allowed = ALLOWED_ATTRIBUTES[element.tagName] || extra ? [...(ALLOWED_ATTRIBUTES[element.tagName] ?? []), ...(extra ?? [])] : undefined;
 
     if (!allowed) {
       return false;

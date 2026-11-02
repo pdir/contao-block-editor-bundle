@@ -574,6 +574,54 @@ body {
   }
 }
 
+/* Rich text in the inspector */
+.cbe-rich {
+  display: grid;
+  gap: 6px;
+}
+
+.cbe-rich [hidden] {
+  display: none;
+}
+
+.cbe-rich__host .cbe-format-bar {
+  position: static;
+  box-shadow: none;
+  background: var(--cbe-fill);
+}
+
+.cbe-rich__text .ProseMirror {
+  background: var(--cbe-control);
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px var(--cbe-control-line);
+  max-height: 320px;
+  min-height: 120px;
+  outline: none;
+  overflow-y: auto;
+  overflow-wrap: break-word;
+  padding: 6px 10px;
+  white-space: pre-wrap;
+}
+
+.cbe-rich__text .ProseMirror:focus {
+  box-shadow: inset 0 0 0 2px var(--cbe-accent);
+}
+
+.cbe-rich__text p {
+  margin: 0 0 0.6em;
+}
+
+.cbe-rich__toggle {
+  background: none;
+  border: 0;
+  color: var(--cbe-accent);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  justify-self: end;
+  padding: 0;
+}
+
 /* Link picker */
 .cbe-picker {
   background: var(--cbe-bg);

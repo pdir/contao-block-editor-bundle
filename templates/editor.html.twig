@@ -6,8 +6,13 @@
     <meta name="robots" content="noindex,nofollow">
     <title>Block-Editor: {{ title }}</title>
     <link rel="stylesheet" href="{{ assets.shell_css }}">
+    {# The bars of the rich text editor, which the inspector shares with the page #}
+    <link rel="stylesheet" href="{{ assets.frame_css }}">
     {% if frame_url is defined %}
         <link rel="modulepreload" href="{{ assets.frame_js }}">
+        {% for script in extension_scripts %}
+            <script type="module" src="{{ script }}"></script>
+        {% endfor %}
         <script type="module" src="{{ assets.shell_js }}"></script>
     {% endif %}
 </head>
@@ -20,7 +25,8 @@
              data-base="{{ app.request.basePath }}"
              data-preview="{{ preview_url }}"
              data-backend="{{ path('contao_backend') }}"
-             data-picker="{{ path('contao_backend_picker') }}">
+             data-picker="{{ path('contao_backend_picker') }}"
+             data-rich-editor="{{ assets.rich_editor_js }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">

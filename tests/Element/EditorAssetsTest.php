@@ -16,7 +16,7 @@ final class EditorAssetsTest extends TestCase
         $this->webDir = sys_get_temp_dir().'/cbe-'.bin2hex(random_bytes(6));
         mkdir($this->webDir.'/bundles/contaoblockeditor', 0777, true);
 
-        foreach (['shell.js', 'shell.css', 'frame.js', 'frame.css'] as $file) {
+        foreach (['shell.js', 'shell.css', 'frame.js', 'frame.css', 'rich-editor.js'] as $file) {
             copy(__DIR__.'/../../public/'.$file, $this->webDir.'/bundles/contaoblockeditor/'.$file);
         }
     }

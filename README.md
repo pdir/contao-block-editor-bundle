@@ -130,6 +130,47 @@ bin/console assets:install public --symlink
 Mit `--symlink` bleiben die Dateien automatisch aktuell. Passen sie nicht zusammen, öffnet sich der Editor nicht und
 zeigt diesen Hinweis, denn alte Skripte verstehen die aktuelle API nicht und könnten Inhalte beschädigen.
 
+## Den Editor für formatierten Text erweitern
+
+Felder mit WYSIWYG-Editor im Backend (`eval.rte`) bearbeitet der Block-Editor in der Seite und im Inspector mit einem
+schlanken Editor ([Tiptap](https://tiptap.dev)): Fett, Kursiv, Link sowie Aufzählungen. Andere Bundles können weitere
+Formate und Buttons ergänzen. Dazu tragen sie ein Skript ein, das im Block-Editor und in der Seitenvorschau geladen wird:
+
+```yaml
+# config/config.yaml
+contao_block_editor:
+    editor_scripts:
+        - bundles/acmeeditor/block-editor.js
+```
+
+Das Skript legt seine Erweiterung in `window.contaoBlockEditorExtensions` ab. Die Reihenfolge der Skripte spielt keine
+Rolle, weil der Editor die Liste erst beim Start liest:
+
+```js
+(window.contaoBlockEditorExtensions ??= []).push({
+    // Tiptap-Erweiterungen, gebaut mit den Klassen des Editors (Extension, Mark, Node, mergeAttributes)
+    extensions: ({ Mark }) => [
+        Mark.create({
+            name: 'superscript',
+            parseHTML: () => [{ tag: 'sup' }],
+            renderHTML: () => ['sup', 0],
+        }),
+    ],
+    // Buttons in der Formatleiste
+    buttons: [{
+        label: 'x²',
+        title: 'Hochgestellt',
+        run: (editor) => editor.chain().focus().toggleMark('superscript').run(),
+        active: (editor) => editor.isActive('superscript'),
+    }],
+    // Markup, das die Erweiterung schreibt: Texte damit bleiben im Editor bearbeitbar
+    allow: { SUP: [] },
+});
+```
+
+Texte mit Markup, das weder der Editor noch eine Erweiterung kennt, öffnet der Block-Editor nur als HTML, damit nichts
+verloren geht. Was gespeichert wird, filtert Contao weiterhin nach den erlaubten Tags aus den Einstellungen.
+
 ## Entwicklung
 
 ```bash

@@ -115,6 +115,14 @@ cto-toolbar,
   box-shadow: 0 0 0 .5px rgb(0 0 0 / 22%), 0 10px 32px rgb(0 0 0 / 24%);
 }
 
+.cbe-format-bar button {
+  min-width: 28px;
+}
+
+.cbe-format-bar [aria-pressed='true'] {
+  background: rgb(118 118 128 / 24%);
+}
+
 .cbe-link-bar[hidden] {
   display: none;
 }

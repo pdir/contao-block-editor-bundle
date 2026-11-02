@@ -7,7 +7,7 @@ export interface InlineConfig {
   mode: 'rich' | 'plain';
   /** The headline of the accordion section around the element, which is outside of its root. */
   section?: boolean;
-  /** A plain string, found by its text. Without it, the value is a text with a unit. */
+  /** Found in the page by its text. A plain value is a string then, not a text with a unit. */
   scalar?: boolean;
 }
 

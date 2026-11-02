@@ -150,8 +150,13 @@ final class EditorFrameListener
         }
 
 
-        $tags = '<link rel="stylesheet" href="'.$url('frame.css').'"'.$nonceAttribute.'>'
-            .'<script type="module" src="'.$url('frame.js').'"'.$nonceAttribute.$attributes.'></script>';
+        $tags = '<link rel="stylesheet" href="'.$url('frame.css').'"'.$nonceAttribute.'>';
+
+        foreach ($this->assets->extensionUrls($request->getBasePath()) as $extension) {
+            $tags .= '<script type="module" src="'.htmlspecialchars($extension, ENT_QUOTES).'"'.$nonceAttribute.'></script>';
+        }
+
+        $tags .= '<script type="module" src="'.$url('frame.js').'"'.$nonceAttribute.$attributes.'></script>';
 
         $response->setContent(substr_replace($content, $tags, $position, 0));
     }

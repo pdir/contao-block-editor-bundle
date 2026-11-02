@@ -1,4 +1,5 @@
 import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
+import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
@@ -42,7 +43,7 @@ const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -82,9 +83,13 @@ function inlineOf(element: Element): InlineConfig[] {
     .filter(({ name, input, multiple, size }) => input === 'text' && !multiple && size <= 1 && name in element.values && !inline.some(({ field }) => field === name))
     .filter(({ name }) => element.values[name] === null || typeof element.values[name] === 'string')
     .map(({ name }) => ({ field: name, selector: null, mode: 'plain', scalar: true }));
+  // Rich texts beyond the element's main text, such as those of other bundles
+  const riches: InlineConfig[] = (schema[element.type]?.fields ?? [])
+    .filter(({ name, input, rich }) => input === 'textarea' && rich && name in element.values && !inline.some(({ field }) => field === name))
+    .map(({ name }) => ({ field: name, selector: null, mode: 'rich', scalar: true }));
   const section: InlineConfig[] = hasSection(element) ? [{ field: 'sectionHeadline', selector: null, mode: 'plain', section: true }] : [];
 
-  return [...inline, ...texts, ...section];
+  return [...inline, ...texts, ...riches, ...section];
 }
 
 function fieldsOf(element: Element): FieldSchema[] {
@@ -446,7 +451,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       textarea.value = String(value ?? '');
       textarea.addEventListener('input', () => change(textarea.value));
       fieldSync.set(field.name, (next) => { textarea.value = String(next ?? ''); });
-      control = textarea;
+      control = field.rich ? richControl(element, field, textarea, change) : textarea;
       break;
     }
     case 'select':
@@ -612,8 +617,78 @@ inspector.addEventListener('focusin', () => updateTooltip());
 inspector.addEventListener('focusout', () => queueMicrotask(() => updateTooltip()));
 inspector.addEventListener('scroll', () => updateTooltip(), { passive: true });
 
+/** Loaded on demand: most pages are edited in place, and the shell must start fast. */
+let richModule: Promise<typeof import('./rich-editor')> | null = null;
+const richFields: RichField[] = [];
+
+/** The text as in the back end, with its HTML a click away. Until the editor is loaded, or if it can't take the markup, only the HTML. */
+function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAreaElement, change: (value: unknown) => void): HTMLElement {
+  const box = document.createElement('div');
+  const host = document.createElement('div');
+  const toggle = document.createElement('button');
+
+  box.className = 'cbe-rich';
+  host.className = 'cbe-rich__host';
+  host.hidden = true;
+  toggle.type = 'button';
+  toggle.className = 'cbe-rich__toggle';
+  toggle.textContent = 'HTML';
+  toggle.hidden = true;
+  box.append(host, textarea, toggle);
+
+  const sync = fieldSync.get(field.name);
+  let rich: RichField | null = null;
+
+  const showRich = (on: boolean): void => {
+    host.hidden = !on;
+    textarea.hidden = on;
+    toggle.textContent = on ? 'HTML' : 'Text';
+    toggle.setAttribute('aria-pressed', String(!on));
+  };
+
+  const mount = (module: typeof import('./rich-editor')): void => {
+    rich?.destroy();
+    rich = module.mountRichField(host, {
+      html: textarea.value,
+      label: field.label,
+      change: (html) => {
+        textarea.value = html;
+        change(html);
+      },
+      pick: (current, done) => openPicker(element.id, current, (value) => value !== null && done(value)),
+    });
+
+    if (rich) {
+      richFields.push(rich);
+    }
+
+    toggle.hidden = false;
+    showRich(Boolean(rich));
+  };
+
+  richModule ??= import(richEditorUrl) as Promise<typeof import('./rich-editor')>;
+  richModule.then((module) => box.isConnected && mount(module)).catch((error: unknown) => console.error('[block-editor] Der Editor für formatierten Text fehlt:', error));
+
+  toggle.addEventListener('click', () => {
+    if (textarea.hidden) {
+      showRich(false);
+      textarea.focus();
+    } else {
+      void richModule?.then((module) => mount(module));
+    }
+  });
+
+  fieldSync.set(field.name, (next) => {
+    sync?.(next);
+    rich?.set(String(next ?? ''));
+  });
+
+  return box;
+}
+
 function renderInspector(): void {
   inspector.replaceChildren();
+  richFields.splice(0).forEach((field) => field.destroy());
   tooltip.hidden = true;
   fieldSync.clear();
 
@@ -848,8 +923,11 @@ renderInspector();
 const pickerDialog = document.getElementById('cbe-picker') as HTMLDialogElement;
 const pickerFrame = pickerDialog.querySelector('iframe') as HTMLIFrameElement;
 let pickerChoice: string | null = null;
+let pickerDone: (value: string | null) => void = () => {};
 
-function openPicker(id: number, value: string): void {
+/** Without a callback, the choice goes to the text being edited in the page. */
+function openPicker(id: number, value: string, done: (value: string | null) => void = (choice) => post({ type: 'cbe:picked', value: choice })): void {
+  pickerDone = done;
   const url = new URL(pickerUrl, window.location.origin);
   url.searchParams.set('context', 'link');
   url.searchParams.set('extras[fieldType]', 'radio');
@@ -891,7 +969,8 @@ pickerDialog.querySelector('[data-picker-cancel]')?.addEventListener('click', ()
 
 // Also closed with Esc: the frame always hears back, so it doesn't wait for a choice
 pickerDialog.addEventListener('close', () => {
-  post({ type: 'cbe:picked', value: pickerChoice });
+  pickerDone(pickerChoice);
+  pickerDone = () => {};
   pickerFrame.src = 'about:blank';
 });
 

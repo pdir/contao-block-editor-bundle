@@ -73,9 +73,10 @@ final class EditorController
         $host = \is_array($parts) ? ($parts['host'] ?? '') : '';
         $parameters = [
             'title' => (string) $page->title,
+            'extension_scripts' => $this->assets->extensionUrls($request->getBasePath()),
             'assets' => array_combine(
-                ['shell_css', 'shell_js', 'frame_js'],
-                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js']),
+                ['shell_css', 'shell_js', 'frame_js', 'frame_css', 'rich_editor_js'],
+                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js', 'frame.css', 'rich-editor.js']),
             ),
         ];
 

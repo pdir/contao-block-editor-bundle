@@ -7,6 +7,7 @@ services:
             $csrfTokenName: '%contao.csrf_token_name%'
             $previewScript: '%contao.preview_script%'
             $webDir: '%contao.web_dir%'
+            $editorScripts: '%contao_block_editor.editor_scripts%'
             $contentUrlGenerator: '@contao.routing.content_url_generator'
 
     Pdir\ContaoBlockEditorBundle\:

@@ -1,11 +1,10 @@
-import { Editor } from '@tiptap/core';
-import Link from '@tiptap/extension-link';
-import StarterKit from '@tiptap/starter-kit';
+import type { Editor } from '@tiptap/core';
 import { LinkBar } from './link-bar';
 import { classifyLink, linkLabel, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
-import { canEditInline, compactListItems, isSafeLink, normalizeLinkInput } from './rich-text-policy';
+import { createRichEditor, editLink, renderFormatBar, richValue } from './rich-text';
+import { canEditInline } from './rich-text-policy';
 import { findByText } from './text-target';
 
 const ID_ATTRIBUTE = 'data-be-id';
@@ -79,6 +78,11 @@ function isOnText(button: Element, x: number, y: number): boolean {
   return rects.length === 0 || rects.some(({ left, right, top, bottom }) => x >= left && x <= right && y >= top && y <= bottom);
 }
 
+/** What a rich text shows, to find it in the page. */
+function htmlText(value: unknown): string {
+  return new DOMParser().parseFromString(String(value ?? ''), 'text/html').body.textContent ?? '';
+}
+
 /** The text of a plain field, which is either a string or a text with a unit. */
 function plainText(value: unknown): string {
   return decodeEntities((typeof value === 'string' ? value : (value as { value?: string } | null)?.value) ?? '');
@@ -93,7 +97,7 @@ function inlineTarget(inline: InlineConfig, root: HTMLElement, shown?: unknown):
   const base = inline.selector ? root.querySelector<HTMLElement>(inline.selector) : root;
 
   if (inline.mode === 'rich') {
-    return base;
+    return inline.scalar ? findByText(root, htmlText(shown === undefined ? known.get(Number(root.getAttribute(ID_ATTRIBUTE)))?.values[inline.field] : shown), (candidate) => candidate.closest(`[${ID_ATTRIBUTE}]`) === root) : base;
   }
 
   // Only a tag of its own can be replaced as a whole: others may hold further fields as well
@@ -102,27 +106,27 @@ function inlineTarget(inline: InlineConfig, root: HTMLElement, shown?: unknown):
   }
 
   const element = known.get(Number(root.getAttribute(ID_ATTRIBUTE)));
-  const rich = element?.inline.find(({ mode }) => mode === 'rich');
-  const richTarget = rich ? inlineTarget(rich, root) : null;
+  const richTargets = (element?.inline ?? []).filter(({ mode }) => mode === 'rich').map((rich) => inlineTarget(rich, root));
   const value = shown === undefined ? element?.values[inline.field] : shown;
 
-  return findByText(inline.scalar || !base ? root : base, plainText(value), (candidate) => candidate.closest(`[${ID_ATTRIBUTE}]`) === root && !richTarget?.contains(candidate));
+  return findByText(inline.scalar || !base ? root : base, plainText(value), (candidate) => candidate.closest(`[${ID_ATTRIBUTE}]`) === root && !richTargets.some((target) => target?.contains(candidate)));
 }
 
 /** The part under the pointer, otherwise the element's main text. */
 function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget | null): InlineConfig | null {
   const plains = element.inline.filter(({ mode }) => mode === 'plain');
-  const rich = element.inline.find(({ mode }) => mode === 'rich');
+  const riches = element.inline.filter(({ mode }) => mode === 'rich');
   const plain = plains.find(({ section }) => !section);
   const plainTarget = plain ? inlineTarget(plain, root) : null;
-  const clicked = hit instanceof Node ? plains.find((inline) => inlineTarget(inline, root)?.contains(hit)) : null;
+  const clicked = hit instanceof Node ? [...plains, ...riches].find((inline) => inlineTarget(inline, root)?.contains(hit)) : null;
 
   if (clicked) {
     return clicked;
   }
 
-  if (rich) {
-    return rich;
+  // The main text, which the element's own configuration names first
+  if (riches.length && !riches[0].scalar) {
+    return riches[0];
   }
 
   return !hit && plainTarget ? (plain as InlineConfig) : null;
@@ -181,14 +185,9 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
   try {
     target.replaceChildren();
 
-    editor = new Editor({
+    editor = createRichEditor({
       element: target,
       content: html,
-      extensions: [
-        StarterKit.configure({ link: false }),
-        // Without the null values, every link would get the extension's target and rel
-        Link.configure({ openOnClick: false, autolink: false, isAllowedUri: (url) => isSafeLink(url ?? ''), HTMLAttributes: { target: null, rel: null, class: null } }),
-      ],
       editorProps: {
         handleKeyDown: (_, keyEvent) => {
           if ((keyEvent.metaKey || keyEvent.ctrlKey) && !keyEvent.altKey && keyEvent.key.toLowerCase() === 'k') {
@@ -202,8 +201,12 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
         },
       },
       onSelectionUpdate: () => refreshLinkBar(),
+      onTransaction: () => {
+        updateFormatBar?.();
+        placeFormatBar();
+      },
       onUpdate: ({ editor: instance }) => {
-        element.values[field] = compactListItems(instance.getHTML());
+        element.values[field] = richValue(instance);
         toShell({ type: 'cbe:change', id: element.id, field, value: element.values[field] });
       },
     });
@@ -228,13 +231,21 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
 
   const started = editor;
 
+  updateFormatBar = renderFormatBar(formatBar, started, () => refreshLinkBar(true));
+  formatBar.hidden = false;
+
   session = {
     ...state,
     editor: started,
-    cleanup: () => started.destroy(),
+    cleanup: () => {
+      formatBar.hidden = true;
+      updateFormatBar = null;
+      started.destroy();
+    },
     showValue: () => setHtml(target, String(element.values[field] ?? '')),
   };
 
+  placeFormatBar();
   refreshLinkBar();
 
   return true;
@@ -395,9 +406,7 @@ function linkIn(target: EventTarget | null): HTMLAnchorElement | HTMLAreaElement
 
 /** The rich text the link is part of, if it can be opened in the editor. */
 function editableText(element: FrameElement, root: HTMLElement, link: Element): InlineConfig | null {
-  const rich = element.inline.find(({ mode }) => mode === 'rich');
-
-  return rich && inlineTarget(rich, root)?.contains(link) && canEditInline(String(element.values?.[rich.field] ?? '')) ? rich : null;
+  return element.inline.find((inline) => inline.mode === 'rich' && inlineTarget(inline, root)?.contains(link) && canEditInline(String(element.values?.[inline.field] ?? ''))) ?? null;
 }
 
 function rectAnchor(link: Element): () => DOMRect | null {
@@ -473,58 +482,21 @@ function refreshLinkBar(requested = false): void {
     return;
   }
 
-  const inLink = editor.isActive('link');
-
-  if (!inLink && !(requested && !editor.state.selection.empty)) {
-    linkBar.hide();
-
-    return;
-  }
-
-  const attributes = editor.getAttributes('link');
-  const href = String(attributes.href ?? '');
-  const resolved = document.createElement('a');
-  resolved.href = href;
-
-  linkBar.showEdit({
-    anchor: () => editor.isDestroyed ? null : editor.view.coordsAtPos(editor.state.selection.from),
-    href,
-    title: String(attributes.title ?? ''),
-    newWindow: attributes.target === '_blank',
+  editLink(linkBar, editor, {
+    requested,
+    anchor: () => (editor.isDestroyed ? null : editor.view.coordsAtPos(editor.state.selection.from)),
     pick: (current, done) => pickLink(element.id, current, done),
     // Without the server, an insert tag has no address yet
-    open: href && !href.includes('{{') ? () => openLink(resolved.href) : null,
-    apply: (value, { title, newWindow }) => {
-      const next = normalizeLinkInput(value);
-
-      if (next !== '' && !isSafeLink(next)) {
-        return false;
+    open: (href) => {
+      if (href.includes('{{')) {
+        return null;
       }
 
-      const chain = editor.chain().focus().extendMarkRange('link');
-      const done = next === '' ? chain.unsetLink().run() : chain.setLink({
-        ...editor.getAttributes('link'),
-        href: next,
-        title: title || null,
-        // Like Contao: a new window without access to this one
-        target: newWindow ? '_blank' : null,
-        rel: newWindow ? 'noopener' : null,
-      } as { href: string }).run();
+      const resolved = document.createElement('a');
+      resolved.href = href;
 
-      // The selection doesn't have to change, and then nothing else would update the bar
-      refreshLinkBar();
-
-      return done;
+      return () => openLink(resolved.href);
     },
-    remove: inLink ? () => {
-      editor.chain().focus().extendMarkRange('link').unsetLink().run();
-      refreshLinkBar();
-    } : null,
-    cancel: () => {
-      linkBar.hide();
-      editor.view.focus();
-    },
-    focus: requested,
   });
 }
 
@@ -578,6 +550,28 @@ function neighbour(root: HTMLElement, direction: -1 | 1): HTMLElement | null {
 }
 
 const linkBar = new LinkBar();
+
+// Bold, italic, link and lists, above the text being edited
+const formatBar = document.createElement('div');
+formatBar.className = 'cbe-link-bar cbe-format-bar';
+formatBar.hidden = true;
+let updateFormatBar: (() => void) | null = null;
+
+function placeFormatBar(): void {
+  const target = session?.editor ? session.target : null;
+
+  if (!target || formatBar.hidden) {
+    return;
+  }
+
+  const { left, top, bottom } = target.getBoundingClientRect();
+  const { width, height } = formatBar.getBoundingClientRect();
+  const above = top - height - 8;
+
+  formatBar.style.left = `${Math.max(8, Math.min(left, window.innerWidth - width - 8))}px`;
+  // Below the text if it starts at the top of the window, but never on top of the text
+  formatBar.style.top = `${above >= 8 ? above : Math.min(bottom + 8, window.innerHeight - height - 8)}px`;
+}
 
 const handle = document.createElement('button');
 handle.type = 'button';
@@ -697,6 +691,7 @@ document.addEventListener('pointerover', (event) => {
 const placeControls = (): void => {
   placeHandle();
   linkBar.place();
+  placeFormatBar();
 };
 
 window.addEventListener('scroll', placeControls, { passive: true, capture: true });
@@ -765,7 +760,7 @@ document.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  if (event.target === handle || (event.target instanceof Node && linkBar.root.contains(event.target))) {
+  if (event.target === handle || (event.target instanceof Node && (linkBar.root.contains(event.target) || formatBar.contains(event.target)))) {
     return;
   }
 
@@ -881,7 +876,7 @@ document.addEventListener('keydown', (event) => {
 });
 
 function applyElements(elements: FrameElement[]): void {
-  document.body.append(handle, dropLine, linkBar.root);
+  document.body.append(handle, dropLine, linkBar.root, formatBar);
   handle.hidden = true;
   dropLine.hidden = true;
 
