@@ -967,6 +967,15 @@ pickerDialog.querySelector('[data-picker-apply]')?.addEventListener('click', () 
 
 pickerDialog.querySelector('[data-picker-cancel]')?.addEventListener('click', () => pickerDialog.close());
 
+// Esc inside of the listing never reaches the dialog, which only hears its own document
+pickerFrame.addEventListener('load', () => {
+  pickerFrame.contentDocument?.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && pickerDialog.open) {
+      pickerDialog.close();
+    }
+  });
+});
+
 // Also closed with Esc: the frame always hears back, so it doesn't wait for a choice
 pickerDialog.addEventListener('close', () => {
   pickerDone(pickerChoice);
