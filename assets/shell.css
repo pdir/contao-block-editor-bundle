@@ -614,12 +614,18 @@ body {
 .cbe-rich__toggle {
   background: none;
   border: 0;
-  color: var(--cbe-accent);
+  border-radius: 7px;
+  color: var(--cbe-muted);
   cursor: pointer;
-  font: inherit;
-  font-size: 12px;
+  display: flex;
   justify-self: end;
-  padding: 0;
+  padding: 4px;
+}
+
+.cbe-rich__toggle:hover,
+.cbe-rich__toggle[aria-pressed='true'] {
+  background: var(--cbe-fill);
+  color: var(--cbe-text);
 }
 
 /* Link picker */

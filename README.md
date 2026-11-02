@@ -160,6 +160,8 @@ Rolle, weil der Editor die Liste erst beim Start liest:
     buttons: [{
         label: 'x²',
         title: 'Hochgestellt',
+        // Optional: Pfad eines 24 × 24 großen Icons wie die von Contao, sonst steht das Label auf dem Button
+        icon: { d: 'M4 18 9 6h2l5 12h-2l-1.3-3.3H7.3L6 18Zm4-5h4L10 8Z', rule: 'nonzero' },
         run: (editor) => editor.chain().focus().toggleMark('superscript').run(),
         active: (editor) => editor.isActive('superscript'),
     }],
@@ -170,6 +172,16 @@ Rolle, weil der Editor die Liste erst beim Start liest:
 
 Texte mit Markup, das weder der Editor noch eine Erweiterung kennt, öffnet der Block-Editor nur als HTML, damit nichts
 verloren geht. Was gespeichert wird, filtert Contao weiterhin nach den erlaubten Tags aus den Einstellungen.
+
+## Lizenz
+
+Der Block-Editor steht unter der GNU Lesser General Public License, Version 3 oder (nach Wahl) jeder späteren
+Version (LGPL-3.0-or-later). Den Lizenztext enthält [`LICENSE`](LICENSE).
+
+Die Icons der Formatleiste stammen aus dem Standard-Iconset von [HugeRTE](https://github.com/hugerte/hugerte), dem
+Editor für formatierten Text im Contao-Backend. Sie stehen unter der MIT-Lizenz, © 2022 Ephox Corporation DBA Tiny
+Technologies, Inc. und © 2025 HugeRTE contributors. Den Lizenztext enthält
+[`licenses/HugeRTE.txt`](licenses/HugeRTE.txt).
 
 ## Entwicklung
 

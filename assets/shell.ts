@@ -1,3 +1,4 @@
+import { ICONS, iconElement } from './editor-icons';
 import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
 import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
@@ -632,7 +633,7 @@ function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAre
   host.hidden = true;
   toggle.type = 'button';
   toggle.className = 'cbe-rich__toggle';
-  toggle.textContent = 'HTML';
+  toggle.append(iconElement(document, ICONS.source));
   toggle.hidden = true;
   box.append(host, textarea, toggle);
 
@@ -642,7 +643,8 @@ function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAre
   const showRich = (on: boolean): void => {
     host.hidden = !on;
     textarea.hidden = on;
-    toggle.textContent = on ? 'HTML' : 'Text';
+    toggle.title = on ? 'Quellcode bearbeiten' : 'Zurück zum formatierten Text';
+    toggle.setAttribute('aria-label', 'Quellcode');
     toggle.setAttribute('aria-pressed', String(!on));
   };
 

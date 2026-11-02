@@ -90,9 +90,9 @@ cto-toolbar,
   background: #f47c00;
 }
 
-/* The page's own styles must not reach the bar */
+/* The page's own styles must not reach the bar. Icons keep theirs: reverted, a path would lose its shape */
 .cbe-link-bar,
-.cbe-link-bar * {
+.cbe-link-bar :not(svg, svg *) {
   all: revert;
   box-sizing: border-box;
   font: 13px/1.4 -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -116,7 +116,15 @@ cto-toolbar,
 }
 
 .cbe-format-bar button {
-  min-width: 28px;
+  display: flex;
+  padding: 4px;
+  color: inherit;
+}
+
+.cbe-format-bar svg {
+  display: block;
+  width: 20px;
+  height: 20px;
 }
 
 .cbe-format-bar [aria-pressed='true'] {

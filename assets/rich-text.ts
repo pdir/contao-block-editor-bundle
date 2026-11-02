@@ -4,12 +4,15 @@
 import { Editor, Extension, Mark, mergeAttributes, Node, type AnyExtension, type EditorOptions } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import StarterKit from '@tiptap/starter-kit';
+import { ICONS, iconElement } from './editor-icons';
 import type { BarAnchor, EditOptions, LinkBar } from './link-bar';
 import { compactListItems, isSafeLink, normalizeLinkInput } from './rich-text-policy';
 
 export interface FormatButton {
-  /** Short, shown on the button. */
+  /** Short, shown on the button if it has no icon. */
   label: string;
+  /** Path data of a 24 × 24 icon, like those of Contao's editor. Only the path: no markup. */
+  icon?: { d: string; rule?: 'evenodd' | 'nonzero' };
   title: string;
   run(editor: Editor): void;
   active?(editor: Editor): boolean;
@@ -67,11 +70,11 @@ export function richValue(editor: Editor): string {
 
 function defaultButtons(link: (editor: Editor) => void): FormatButton[] {
   return [
-    { label: 'B', title: 'Fett (Strg/Cmd + B)', run: (editor) => editor.chain().focus().toggleBold().run(), active: (editor) => editor.isActive('bold') },
-    { label: 'I', title: 'Kursiv (Strg/Cmd + I)', run: (editor) => editor.chain().focus().toggleItalic().run(), active: (editor) => editor.isActive('italic') },
-    { label: 'Link', title: 'Link (Strg/Cmd + K)', run: link, active: (editor) => editor.isActive('link') },
-    { label: '•', title: 'Aufzählung', run: (editor) => editor.chain().focus().toggleBulletList().run(), active: (editor) => editor.isActive('bulletList') },
-    { label: '1.', title: 'Nummerierte Liste', run: (editor) => editor.chain().focus().toggleOrderedList().run(), active: (editor) => editor.isActive('orderedList') },
+    { label: 'B', icon: ICONS.bold, title: 'Fett (Strg/Cmd + B)', run: (editor) => editor.chain().focus().toggleBold().run(), active: (editor) => editor.isActive('bold') },
+    { label: 'I', icon: ICONS.italic, title: 'Kursiv (Strg/Cmd + I)', run: (editor) => editor.chain().focus().toggleItalic().run(), active: (editor) => editor.isActive('italic') },
+    { label: 'Link', icon: ICONS.link, title: 'Link (Strg/Cmd + K)', run: link, active: (editor) => editor.isActive('link') },
+    { label: '•', icon: ICONS.bulletList, title: 'Aufzählung', run: (editor) => editor.chain().focus().toggleBulletList().run(), active: (editor) => editor.isActive('bulletList') },
+    { label: '1.', icon: ICONS.orderedList, title: 'Nummerierte Liste', run: (editor) => editor.chain().focus().toggleOrderedList().run(), active: (editor) => editor.isActive('orderedList') },
   ];
 }
 
@@ -81,7 +84,14 @@ export function renderFormatBar(bar: HTMLElement, editor: Editor, link: (editor:
   const elements = buttons.map((definition) => {
     const button = bar.ownerDocument.createElement('button');
     button.type = 'button';
-    button.textContent = definition.label;
+    const icon = definition.icon && typeof definition.icon.d === 'string' ? iconElement(bar.ownerDocument, { d: definition.icon.d, rule: definition.icon.rule === 'evenodd' ? 'evenodd' : 'nonzero' }) : null;
+
+    if (icon) {
+      button.append(icon);
+    } else {
+      button.textContent = definition.label;
+    }
+
     button.title = definition.title;
     button.setAttribute('aria-label', definition.title);
     // The selection in the text must stay where it is
