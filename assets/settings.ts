@@ -10,6 +10,7 @@ const VIEWPORT_KEY = 'cbe-viewport';
 const INSPECTOR_KEY = 'cbe-inspector';
 const CORNERS_KEY = 'cbe-corners';
 const NAV_EDIT_KEY = 'cbe-nav-edit';
+const SINGLE_KEYS_KEY = 'cbe-single-keys';
 
 function read(key: string): string | null {
   try {
@@ -81,4 +82,13 @@ export function storedNavEdit(): boolean {
 
 export function storeNavEdit(enabled: boolean): void {
   write(NAV_EDIT_KEY, enabled ? 'on' : 'off');
+}
+
+/** Shortcuts with single keys, on by default. Screen readers use such keys themselves. */
+export function storedSingleKeys(): boolean {
+  return read(SINGLE_KEYS_KEY) !== 'off';
+}
+
+export function storeSingleKeys(enabled: boolean): void {
+  write(SINGLE_KEYS_KEY, enabled ? 'on' : 'off');
 }

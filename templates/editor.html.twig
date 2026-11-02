@@ -92,9 +92,9 @@
                             <dt>Text</dt>
                             <dd>Reinklicken und tippen, <kbd>Esc</kbd> beendet.</dd>
                             <dt>Verschieben</dt>
-                            <dd>Griff <span class="cbe-help-handle" aria-hidden="true"><svg viewBox="0 0 8 12" width="8" height="12" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span> ziehen oder <kbd>Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>.</dd>
+                            <dd>Griff <span class="cbe-help-handle" aria-hidden="true"><svg viewBox="0 0 8 12" width="8" height="12" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span> ziehen oder <kbd data-key="alt">Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>.</dd>
                             <dt>Links</dt>
-                            <dd>Klick im Text: <em>Öffnen</em> oder <em>Bearbeiten</em>. Neu: Text markieren, <kbd>Strg</kbd>/<kbd>Cmd</kbd> + <kbd>K</kbd>.</dd>
+                            <dd>Klick im Text: <em>Öffnen</em> oder <em>Bearbeiten</em>. Neu: Text markieren, <kbd data-key="mod">Strg</kbd> + <kbd>K</kbd>.</dd>
                             <dt>Seite wechseln</dt>
                             <dd>Link in der Navigation anklicken.</dd>
                         </dl>
@@ -118,7 +118,30 @@
                                 <div class="cbe-field cbe-field--switch">
                                     <label for="cbe-setting-nav-edit">Navigationslinks bearbeiten</label>
                                     <input id="cbe-setting-nav-edit" type="checkbox" data-setting="nav-edit" aria-describedby="cbe-setting-nav-edit-hint">
-                                    <p id="cbe-setting-nav-edit-hint" class="cbe-description">Ein Klick auf einen Menüpunkt ändert den Seitennamen. Geöffnet wird die Seite dann über die Leiste am Link.</p>
+                                    <p id="cbe-setting-nav-edit-hint" class="cbe-description">Ein Klick auf einen Menüpunkt ändert den Seitennamen. Geöffnet wird die Seite dann über die Leiste am Link. Taste <kbd>N</kbd></p>
+                                </div>
+                            </div>
+                        </details>
+                        <details id="cbe-shortcuts" class="cbe-help-more">
+                            <summary>Globale Tastaturbefehle</summary>
+                            <dl>
+                                <dt>Inspector ein/aus</dt>
+                                <dd><kbd>I</kbd> oder <kbd data-key="mod">Strg</kbd> + <kbd data-key="shift">Umschalt</kbd> + <kbd>,</kbd>, das geht auch beim Schreiben.</dd>
+                                <dt>Navigationslinks bearbeiten</dt>
+                                <dd><kbd>N</kbd> schaltet ein und aus.</dd>
+                                <dt>Vorschaubreite</dt>
+                                <dd><kbd>1</kbd> Desktop, <kbd>2</kbd> Tablet, <kbd>3</kbd> Mobil.</dd>
+                                <dt>Diese Übersicht</dt>
+                                <dd><kbd>?</kbd></dd>
+                                <dt>Im Text</dt>
+                                <dd><kbd data-key="mod">Strg</kbd> + <kbd>B</kbd> fett, <kbd data-key="mod">Strg</kbd> + <kbd>I</kbd> kursiv, <kbd data-key="mod">Strg</kbd> + <kbd>K</kbd> Link, <kbd>Esc</kbd> beendet.</dd>
+                            </dl>
+                            <p>Einzelne Tasten wirken nur, wenn gerade kein Text bearbeitet wird. Browser-Kürzel bleiben unberührt.</p>
+                            <div class="cbe-help-settings">
+                                <div class="cbe-field cbe-field--switch">
+                                    <label for="cbe-setting-single-keys">Befehle mit einzelnen Tasten</label>
+                                    <input id="cbe-setting-single-keys" type="checkbox" data-setting="single-keys" aria-describedby="cbe-setting-single-keys-hint">
+                                    <p id="cbe-setting-single-keys-hint" class="cbe-description">Für Screenreader ausschalten, die einzelne Tasten selbst nutzen.</p>
                                 </div>
                             </div>
                         </details>

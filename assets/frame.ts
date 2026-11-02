@@ -6,6 +6,8 @@ import type { FrameElement, FramePage, InlineConfig, MovePosition, ToFrame, ToSh
 import { readMessage } from './protocol';
 import { createRichEditor, editLink, renderFormatBar, richValue } from './rich-text';
 import { canEditInline } from './rich-text-policy';
+import { storedSingleKeys } from './settings';
+import { isTyping, shortcutFor } from './shortcuts';
 import { findByText, wrapTextRun } from './text-target';
 
 const ID_ATTRIBUTE = 'data-be-id';
@@ -901,7 +903,17 @@ document.addEventListener('click', (event) => {
 document.addEventListener('submit', (event) => event.preventDefault(), true);
 
 document.addEventListener('keydown', (event) => {
-  if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+  const shortcut = shortcutFor(event, storedSingleKeys());
+
+  if (shortcut) {
+    event.preventDefault();
+    toShell({ type: 'cbe:shortcut', name: shortcut });
+
+    return;
+  }
+
+  // Not while typing: on a Mac, Option+Up moves the caret to the start of the paragraph
+  if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown') && !isTyping(event.target)) {
     const root = closestId(event.target)?.root;
     const target = root ? neighbour(root, event.key === 'ArrowUp' ? -1 : 1) : null;
 

@@ -1,5 +1,6 @@
 // Messages between the editor shell (parent window) and the page in the iframe.
 // The security token only lives in the shell; the frame cannot talk to the API.
+import type { Shortcut } from './shortcuts';
 
 export interface InlineConfig {
   field: string;
@@ -59,7 +60,9 @@ export type ToShell =
   | { type: 'cbe:pick-link'; id: number; value: string }
   | { type: 'cbe:nav-links'; urls: string[] }
   | { type: 'cbe:page-select'; id: number }
-  | { type: 'cbe:page-change'; id: number; title: string };
+  | { type: 'cbe:page-change'; id: number; title: string }
+  /** Pressed while the page had the focus. */
+  | { type: 'cbe:shortcut'; name: Shortcut };
 
 const PREFIX = 'cbe:';
 

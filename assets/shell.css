@@ -873,6 +873,14 @@ body {
   padding-top: 12px;
 }
 
+.cbe-help-settings .cbe-description {
+  white-space: normal;
+}
+
+.cbe-help-more > p {
+  margin: 10px 0 0;
+}
+
 .cbe-help-settings .cbe-field {
   color: var(--cbe-text);
   font-size: 13px;

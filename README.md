@@ -25,6 +25,10 @@ im Text lassen sie sich dort ändern oder entfernen und mit Strg/Cmd + K neu anl
 Unter „Mehr erfahren“ im Inspector lässt sich „Navigationslinks bearbeiten“ einschalten: Ein Klick auf einen Menüpunkt
 ändert dann den Seitennamen direkt im Menü, und der Inspector zeigt die weiteren Angaben der Seite. Es gelten die Rechte
 für Seiten aus dem Backend, gespeichert wird mit Versionierung wie bei den Elementen.
+Die Tastaturbefehle erklärt der Inspector unter „Globale Tastaturbefehle“ (Taste `?`). Einzelne Tasten wirken nur,
+wenn gerade kein Text bearbeitet wird, und lassen sich für Screenreader abschalten. Beim Schreiben gilt nur
+Strg/⌘ + Umschalt + Komma für den Inspector. Kombinationen der Browser und Tasten, die Zeichen erzeugen (⌥ auf dem Mac,
+AltGr unter Windows), bleiben unberührt.
 
 Noch offen: Inserter, Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
 Responsive-Vorschau und die Erweiterungs-API. Felder, die der Editor noch nicht unterstützt, bleiben über den Link

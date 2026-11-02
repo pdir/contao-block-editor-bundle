@@ -5,7 +5,8 @@ import type { FrameElement, FramePage, InlineConfig, ToFrame, ToShell, MovePosit
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 import type { NavPages } from './nav-pages';
-import { applyCorners, applyInspector, applyViewport, storedInspector, storedNavEdit, storedRoundCorners, storedViewport, storeNavEdit, type Viewport } from './settings';
+import { applyCorners, applyInspector, applyViewport, storedInspector, storedNavEdit, storedRoundCorners, storedSingleKeys, storedViewport, storeNavEdit, storeSingleKeys, type Viewport } from './settings';
+import { isMac, shortcutFor, type Shortcut } from './shortcuts';
 
 interface FieldSchema {
   name: string;
@@ -724,6 +725,7 @@ function renderInspector(): void {
     if (help) {
       inspector.append(help.content.cloneNode(true));
       bindSettings();
+      labelKeys(inspector);
     }
 
     return;
@@ -792,6 +794,9 @@ window.addEventListener('message', (event) => {
       break;
     case 'cbe:page-change':
       void navPages?.then((pages) => pages.rename(message.id, message.title, 'page'));
+      break;
+    case 'cbe:shortcut':
+      runShortcut(message.name);
       break;
     case 'cbe:nav-links':
       void navPages?.then((pages) => pages.resolve(message.urls)).catch((error: Error) => setStatus(error.message, true));
@@ -969,12 +974,81 @@ function bindSettings(): void {
 
   if (navEdit) {
     navEdit.checked = storedNavEdit();
-    navEdit.addEventListener('change', () => {
-      storeNavEdit(navEdit.checked);
-      showNavEdit(navEdit.checked);
-    });
+    navEdit.addEventListener('change', () => setNavEdit(navEdit.checked));
+  }
+
+  const singleKeys = inspector.querySelector<HTMLInputElement>('[data-setting="single-keys"]');
+
+  if (singleKeys) {
+    singleKeys.checked = storedSingleKeys();
+    singleKeys.addEventListener('change', () => storeSingleKeys(singleKeys.checked));
   }
 }
+
+function setNavEdit(enabled: boolean): void {
+  storeNavEdit(enabled);
+  showNavEdit(enabled);
+
+  const box = inspector.querySelector<HTMLInputElement>('[data-setting="nav-edit"]');
+
+  if (box) {
+    box.checked = enabled;
+  }
+
+  // Also for screen readers: the status is a live region
+  setStatus(`Navigationslinks bearbeiten: ${enabled ? 'an' : 'aus'}`);
+}
+
+/** The keys as printed on the keyboard: Strg and Umschalt on Windows, symbols on a Mac. */
+function labelKeys(scope: ParentNode): void {
+  if (!isMac()) {
+    return;
+  }
+
+  const symbols: Record<string, string> = { mod: '⌘', shift: '⇧', alt: '⌥' };
+
+  for (const key of scope.querySelectorAll<HTMLElement>('kbd[data-key]')) {
+    key.textContent = symbols[key.dataset.key as string] ?? key.textContent;
+  }
+}
+
+function showShortcuts(): void {
+  post({ type: 'cbe:end' });
+  selected = null;
+  selectedPage = null;
+  showInspector(true, true);
+  renderInspector();
+
+  const shortcuts = inspector.querySelector<HTMLDetailsElement>('#cbe-shortcuts');
+
+  if (shortcuts) {
+    shortcuts.open = true;
+    shortcuts.scrollIntoView({ block: 'nearest' });
+    shortcuts.querySelector('summary')?.focus();
+  }
+}
+
+function runShortcut(name: Shortcut): void {
+  if (name === 'help') {
+    showShortcuts();
+  } else if (name === 'inspector') {
+    showInspector(Boolean(inspector.hidden), true);
+  } else if (name === 'nav-edit') {
+    setNavEdit(!storedNavEdit());
+  } else {
+    showViewport(name, true);
+  }
+}
+
+// The page in the frame passes on what is pressed there
+document.addEventListener('keydown', (event) => {
+  const shortcut = shortcutFor(event, storedSingleKeys());
+
+  if (shortcut) {
+    event.preventDefault();
+    runShortcut(shortcut);
+  }
+});
 
 if (storedNavEdit()) {
   void loadNavPages();
