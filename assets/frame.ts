@@ -456,11 +456,20 @@ function selectLink(text: string, index: number): void {
   refreshLinkBar();
 }
 
+/** The choice of the picker, which the shell opens over the whole editor. */
+let picked: ((href: string) => void) | null = null;
+
+function pickLink(id: number, current: string, done: (href: string) => void): void {
+  picked = done;
+  toShell({ type: 'cbe:pick-link', id, value: current });
+}
+
 /** Keeps the bar in line with the caret: it shows up inside of links, or on request. */
 function refreshLinkBar(requested = false): void {
   const editor = session?.editor;
+  const element = session?.element;
 
-  if (!editor) {
+  if (!editor || !element) {
     return;
   }
 
@@ -472,16 +481,20 @@ function refreshLinkBar(requested = false): void {
     return;
   }
 
-  const href = String(editor.getAttributes('link').href ?? '');
+  const attributes = editor.getAttributes('link');
+  const href = String(attributes.href ?? '');
   const resolved = document.createElement('a');
   resolved.href = href;
 
   linkBar.showEdit({
     anchor: () => editor.isDestroyed ? null : editor.view.coordsAtPos(editor.state.selection.from),
     href,
+    title: String(attributes.title ?? ''),
+    newWindow: attributes.target === '_blank',
+    pick: (current, done) => pickLink(element.id, current, done),
     // Without the server, an insert tag has no address yet
     open: href && !href.includes('{{') ? () => openLink(resolved.href) : null,
-    apply: (value) => {
+    apply: (value, { title, newWindow }) => {
       const next = normalizeLinkInput(value);
 
       if (next !== '' && !isSafeLink(next)) {
@@ -489,7 +502,14 @@ function refreshLinkBar(requested = false): void {
       }
 
       const chain = editor.chain().focus().extendMarkRange('link');
-      const done = next === '' ? chain.unsetLink().run() : chain.setLink({ ...editor.getAttributes('link'), href: next } as { href: string }).run();
+      const done = next === '' ? chain.unsetLink().run() : chain.setLink({
+        ...editor.getAttributes('link'),
+        href: next,
+        title: title || null,
+        // Like Contao: a new window without access to this one
+        target: newWindow ? '_blank' : null,
+        rel: newWindow ? 'noopener' : null,
+      } as { href: string }).run();
 
       // The selection doesn't have to change, and then nothing else would update the bar
       refreshLinkBar();
@@ -974,6 +994,13 @@ window.addEventListener('message', (event) => {
       break;
     case 'cbe:refresh':
       void refresh(message.id);
+      break;
+    case 'cbe:picked':
+      if (message.value !== null) {
+        picked?.(message.value);
+      }
+
+      picked = null;
       break;
     case 'cbe:show': {
       const root = findElement(message.id);

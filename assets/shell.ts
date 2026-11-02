@@ -42,7 +42,7 @@ const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -691,6 +691,9 @@ window.addEventListener('message', (event) => {
         queue.change(message.id, message.field, message.value);
       }
       break;
+    case 'cbe:pick-link':
+      openPicker(message.id, message.value);
+      break;
     case 'cbe:move': {
       const { id, target, position } = message;
 
@@ -722,7 +725,12 @@ window.addEventListener('message', (event) => {
 });
 
 // A click into the inspector or the toolbar never reaches the frame's own listener
-document.addEventListener('pointerdown', () => post({ type: 'cbe:end' }), true);
+document.addEventListener('pointerdown', ({ target }) => {
+  // The link picker belongs to the text being edited
+  if (!(target instanceof Node && document.getElementById('cbe-picker')?.contains(target))) {
+    post({ type: 'cbe:end' });
+  }
+}, true);
 
 // Either side can start first: the frame announces itself and also answers this
 frame.addEventListener('load', () => {
@@ -835,3 +843,55 @@ window.addEventListener('beforeunload', (event) => {
 });
 
 renderInspector();
+
+// The link picker of Contao, with pages, files, news and whatever other bundles add
+const pickerDialog = document.getElementById('cbe-picker') as HTMLDialogElement;
+const pickerFrame = pickerDialog.querySelector('iframe') as HTMLIFrameElement;
+let pickerChoice: string | null = null;
+
+function openPicker(id: number, value: string): void {
+  const url = new URL(pickerUrl, window.location.origin);
+  url.searchParams.set('context', 'link');
+  url.searchParams.set('extras[fieldType]', 'radio');
+  url.searchParams.set('extras[source]', `tl_content.${id}`);
+  // Contao adds the flag on save, the picker only knows the plain tag
+  url.searchParams.set('value', value.replace(/\|urlattr(?=\}\}$)/, ''));
+  url.searchParams.set('popup', '1');
+
+  pickerChoice = null;
+  pickerFrame.src = url.href;
+  pickerDialog.showModal();
+}
+
+/** Read like Contao's own modal does: the checked entry of the listing in the frame. */
+function readPickerChoice(): string | null {
+  const listing = pickerFrame.contentDocument?.querySelector<HTMLElement>('#tl_listing, #tl_select');
+  const checked = listing?.querySelector<HTMLInputElement>('input:checked:not([id^="check_all_"]):not([id^="reset_"])');
+
+  if (checked) {
+    return checked.value;
+  }
+
+  // Chosen before, on another page of the listing
+  try {
+    const previous = JSON.parse(listing?.dataset.pickerValue ?? '[]') as unknown[];
+
+    return typeof previous[0] === 'string' ? previous[0] : null;
+  } catch {
+    return null;
+  }
+}
+
+pickerDialog.querySelector('[data-picker-apply]')?.addEventListener('click', () => {
+  pickerChoice = readPickerChoice();
+  pickerDialog.close();
+});
+
+pickerDialog.querySelector('[data-picker-cancel]')?.addEventListener('click', () => pickerDialog.close());
+
+// Also closed with Esc: the frame always hears back, so it doesn't wait for a choice
+pickerDialog.addEventListener('close', () => {
+  post({ type: 'cbe:picked', value: pickerChoice });
+  pickerFrame.src = 'about:blank';
+});
+

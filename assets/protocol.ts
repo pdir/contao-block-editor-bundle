@@ -32,6 +32,8 @@ export type ToFrame =
   | { type: 'cbe:refresh'; id: number }
   /** Brings an element into view, for example the one opened from the back end. */
   | { type: 'cbe:show'; id: number }
+  /** Null if the picker was closed without a choice. */
+  | { type: 'cbe:picked'; value: string | null }
   | { type: 'cbe:revert'; id: number; field: string; value: unknown }
   | { type: 'cbe:moved'; id: number; ok: boolean };
 
@@ -41,7 +43,8 @@ export type ToShell =
   | { type: 'cbe:select'; id: number | null }
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
   | { type: 'cbe:commit'; id: number; render: boolean }
-  | { type: 'cbe:move'; id: number; target: number; position: MovePosition };
+  | { type: 'cbe:move'; id: number; target: number; position: MovePosition }
+  | { type: 'cbe:pick-link'; id: number; value: string };
 
 const PREFIX = 'cbe:';
 

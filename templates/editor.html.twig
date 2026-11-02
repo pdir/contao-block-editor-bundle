@@ -19,7 +19,8 @@
              data-schema="{{ path('pdir_block_editor_api_schema') }}"
              data-base="{{ app.request.basePath }}"
              data-preview="{{ preview_url }}"
-             data-backend="{{ path('contao_backend') }}">
+             data-backend="{{ path('contao_backend') }}"
+             data-picker="{{ path('contao_backend_picker') }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">
@@ -72,6 +73,14 @@
                     </section>
                 </template>
             </main>
+            <dialog id="cbe-picker" class="cbe-picker" aria-labelledby="cbe-picker-title">
+                <h2 id="cbe-picker-title">Link auswählen</h2>
+                <iframe class="cbe-picker__frame" title="Seiten, Dateien und weitere Ziele"></iframe>
+                <div class="cbe-picker__actions">
+                    <button class="cbe-button" type="button" data-picker-cancel>Abbrechen</button>
+                    <button class="cbe-button cbe-button--primary" type="button" data-picker-apply>Übernehmen</button>
+                </div>
+            </dialog>
         </div>
     {% else %}
         <main class="cbe-notice">

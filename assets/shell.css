@@ -574,6 +574,64 @@ body {
   }
 }
 
+/* Link picker */
+.cbe-picker {
+  background: var(--cbe-bg);
+  border: 0;
+  border-radius: 14px;
+  box-shadow: var(--cbe-sheet-shadow);
+  color: var(--cbe-text);
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  height: min(720px, calc(100vh - 32px));
+  padding: 16px;
+  width: min(900px, calc(100vw - 32px));
+}
+
+.cbe-picker[open] {
+  display: flex;
+}
+
+.cbe-picker::backdrop {
+  background: rgb(0 0 0 / 35%);
+}
+
+.cbe-picker h2 {
+  font-size: 15px;
+  margin: 0;
+}
+
+.cbe-picker__frame {
+  border: 0;
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--cbe-border);
+  flex: 1;
+  width: 100%;
+}
+
+.cbe-picker__actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.cbe-button {
+  background: var(--cbe-fill);
+  border: 0;
+  border-radius: 8px;
+  color: var(--cbe-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 500;
+  padding: 6px 14px;
+}
+
+.cbe-button--primary {
+  background: var(--cbe-accent);
+  color: var(--cbe-on-accent);
+}
+
 /* Help */
 .cbe-help {
   color: var(--cbe-muted);

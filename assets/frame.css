@@ -154,6 +154,17 @@ cto-toolbar,
   color: inherit;
 }
 
+.cbe-link-bar__title {
+  flex: 1 1 140px;
+}
+
+.cbe-link-bar__check {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px;
+}
+
 .cbe-link-bar__hint {
   padding: 0 7px;
   color: #636366;

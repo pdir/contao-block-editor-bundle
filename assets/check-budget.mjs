@@ -2,7 +2,7 @@
 import { readFileSync, rmSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 
-const budgets = { 'public/shell.js': 8, 'public/frame.js': 130, 'public/shell.css': 3, 'public/frame.css': 1 };
+const budgets = { 'public/shell.js': 8, 'public/frame.js': 130, 'public/shell.css': 3, 'public/frame.css': 1.25 };
 let failed = false;
 
 for (const [file, budget] of Object.entries(budgets)) {

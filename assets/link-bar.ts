@@ -26,10 +26,17 @@ export interface ReadOptions extends BarOptions {
   focus: boolean;
 }
 
-export interface EditOptions extends BarOptions {
+export interface LinkDetails {
+  title: string;
+  newWindow: boolean;
+}
+
+export interface EditOptions extends BarOptions, LinkDetails {
   href: string;
   /** Returns false if the address is not allowed. */
-  apply(href: string): boolean;
+  apply(href: string, details: LinkDetails): boolean;
+  /** Opens the Contao picker for pages, files, news and more, and hands back the choice. */
+  pick: ((current: string, done: (href: string) => void) => void) | null;
   remove: (() => void) | null;
   cancel(): void;
   focus: boolean;
@@ -103,12 +110,27 @@ export class LinkBar {
     input.placeholder = 'https://… oder {{link_url::ID}}';
     input.setAttribute('aria-label', 'Linkadresse');
 
+    const title = document.createElement('input');
+    title.type = 'text';
+    title.className = 'cbe-link-bar__input cbe-link-bar__title';
+    title.value = options.title;
+    title.placeholder = 'Titel (optional)';
+    title.setAttribute('aria-label', 'Titel des Links');
+
+    const newWindow = document.createElement('input');
+    newWindow.type = 'checkbox';
+    newWindow.checked = options.newWindow;
+
+    const newWindowLabel = document.createElement('label');
+    newWindowLabel.className = 'cbe-link-bar__check';
+    newWindowLabel.append(newWindow, 'Neues Fenster');
+
     const error = document.createElement('span');
     error.className = 'cbe-link-bar__error';
     error.setAttribute('role', 'alert');
 
     const apply = (): void => {
-      const valid = options.apply(input.value);
+      const valid = options.apply(input.value, { title: title.value.trim(), newWindow: newWindow.checked });
 
       input.toggleAttribute('aria-invalid', !valid);
       error.textContent = valid ? '' : 'Diese Adresse ist nicht erlaubt.';
@@ -120,13 +142,24 @@ export class LinkBar {
 
       if (event.key === 'Escape') {
         options.cancel();
-      } else if (event.key === 'Enter' && event.target === input) {
+      } else if (event.key === 'Enter' && (event.target === input || event.target === title)) {
         event.preventDefault();
         apply();
       }
     };
 
-    const controls: HTMLElement[] = [input, button('Übernehmen', apply)];
+    const controls: HTMLElement[] = [input];
+
+    if (options.pick) {
+      const pick = options.pick;
+
+      controls.push(button('Auswählen …', () => pick(input.value, (href) => {
+        input.value = href;
+        apply();
+      })));
+    }
+
+    controls.push(button('Übernehmen', apply));
 
     if (options.open) {
       controls.push(button('Öffnen', options.open));
@@ -136,7 +169,7 @@ export class LinkBar {
       controls.push(button('Entfernen', options.remove));
     }
 
-    controls.push(error);
+    controls.push(title, newWindowLabel, error);
     this.render(controls, options);
 
     if (options.focus) {
