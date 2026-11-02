@@ -84,6 +84,90 @@ body {
   min-width: 0;
 }
 
+.cbe-main[data-viewport='tablet'],
+.cbe-main[data-viewport='mobile'] {
+  background: var(--cbe-panel);
+}
+
+.cbe-main[data-viewport='tablet'] .cbe-frame,
+.cbe-main[data-viewport='mobile'] .cbe-frame {
+  border-inline: 1px solid var(--cbe-border);
+  flex: 0 1 auto;
+  margin-inline: auto;
+}
+
+/* Includes the borders, so the page itself gets exactly the width of the device */
+.cbe-main[data-viewport='tablet'] .cbe-frame {
+  width: 770px;
+}
+
+.cbe-main[data-viewport='mobile'] .cbe-frame {
+  width: 377px;
+}
+
+.cbe-inspector[hidden] {
+  display: none;
+}
+
+.cbe-icon-button {
+  align-items: center;
+  background: none;
+  border: 1px solid var(--cbe-border);
+  border-radius: 4px;
+  color: var(--cbe-text);
+  cursor: pointer;
+  display: flex;
+  flex: none;
+  padding: 4px 6px;
+}
+
+.cbe-icon-button[aria-pressed='true'] {
+  background: var(--cbe-accent);
+  border-color: var(--cbe-accent);
+  color: var(--cbe-bg);
+}
+
+.cbe-icon-button:focus-visible {
+  outline: 2px solid var(--cbe-accent);
+  outline-offset: 1px;
+}
+
+.cbe-viewports {
+  display: flex;
+  flex: none;
+}
+
+.cbe-viewport {
+  background: none;
+  border: 1px solid var(--cbe-border);
+  color: var(--cbe-text);
+  cursor: pointer;
+  font: inherit;
+  margin-left: -1px;
+  padding: 2px 10px;
+}
+
+.cbe-viewport:first-child {
+  border-radius: 4px 0 0 4px;
+  margin-left: 0;
+}
+
+.cbe-viewport:last-child {
+  border-radius: 0 4px 4px 0;
+}
+
+.cbe-viewport[aria-pressed='true'] {
+  background: var(--cbe-accent);
+  border-color: var(--cbe-accent);
+  color: var(--cbe-bg);
+}
+
+.cbe-viewport:focus-visible {
+  outline: 2px solid var(--cbe-accent);
+  outline-offset: 1px;
+  position: relative;
+}
+
 .cbe-inspector {
   background: var(--cbe-panel);
   border-left: 1px solid var(--cbe-border);

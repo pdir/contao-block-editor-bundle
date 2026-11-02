@@ -671,6 +671,64 @@ frame.addEventListener('load', () => {
 
 back.addEventListener('click', () => window.history.back());
 
+/** Only conveniences: without storage a choice lasts until the next reload. */
+function readSetting(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeSetting(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // See above
+  }
+}
+
+const VIEWPORT_KEY = 'cbe-viewport';
+const viewportButtons = [...document.querySelectorAll<HTMLButtonElement>('.cbe-viewport')];
+
+function showViewport(viewport: string): void {
+  (frame.parentElement as HTMLElement).dataset.viewport = viewport;
+
+  for (const button of viewportButtons) {
+    button.setAttribute('aria-pressed', String(button.dataset.viewport === viewport));
+  }
+}
+
+for (const button of viewportButtons) {
+  button.addEventListener('click', () => {
+    const viewport = button.dataset.viewport as string;
+
+    showViewport(viewport);
+    writeSetting(VIEWPORT_KEY, viewport);
+  });
+}
+
+const storedViewport = readSetting(VIEWPORT_KEY);
+
+if (viewportButtons.some((button) => button.dataset.viewport === storedViewport)) {
+  showViewport(storedViewport as string);
+}
+
+const INSPECTOR_KEY = 'cbe-inspector';
+const inspectorToggle = document.getElementById('cbe-inspector-toggle') as HTMLButtonElement;
+
+function showInspector(visible: boolean): void {
+  inspector.hidden = !visible;
+  inspectorToggle.setAttribute('aria-pressed', String(visible));
+}
+
+inspectorToggle.addEventListener('click', () => {
+  showInspector(Boolean(inspector.hidden));
+  writeSetting(INSPECTOR_KEY, inspector.hidden ? 'hidden' : 'visible');
+});
+
+showInspector(readSetting(INSPECTOR_KEY) !== 'hidden');
+
 window.history.replaceState({ frame: frame.src }, '');
 
 window.addEventListener('popstate', (event) => {

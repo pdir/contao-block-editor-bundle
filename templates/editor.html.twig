@@ -24,6 +24,14 @@
                 <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
                 <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
+                <div class="cbe-viewports" role="group" aria-label="Vorschaubreite">
+                    <button class="cbe-viewport" type="button" data-viewport="desktop" aria-pressed="true" title="Volle Breite">Desktop</button>
+                    <button class="cbe-viewport" type="button" data-viewport="tablet" aria-pressed="false" title="768 Pixel breit">Tablet</button>
+                    <button class="cbe-viewport" type="button" data-viewport="mobile" aria-pressed="false" title="375 Pixel breit">Mobil</button>
+                </div>
+                <button id="cbe-inspector-toggle" class="cbe-icon-button" type="button" aria-pressed="true" aria-controls="cbe-inspector" aria-label="Inspector" title="Inspector ein- oder ausblenden">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="M10 2.75v10.5"/></svg>
+                </button>
                 <a class="cbe-link" href="{{ path('contao_backend', {do: 'page'}) }}">Zum Backend</a>
             </header>
             <main class="cbe-main">
