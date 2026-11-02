@@ -271,6 +271,87 @@ body {
   color: var(--cbe-accent);
 }
 
+/* Contao's preview toolbar, as a menu below its button */
+.cbe-preview {
+  flex: none;
+  position: relative;
+}
+
+/* Shows that the page is not seen as by a guest */
+#cbe-preview-toggle[data-active]::after {
+  background: var(--cbe-accent);
+  border-radius: 50%;
+  content: '';
+  height: 6px;
+  position: absolute;
+  right: 4px;
+  top: 4px;
+  width: 6px;
+}
+
+#cbe-preview-toggle {
+  position: relative;
+}
+
+.cbe-preview__menu {
+  background: var(--cbe-bg);
+  border-radius: calc(12px * var(--cbe-round, 1));
+  box-shadow: var(--cbe-sheet-shadow);
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  width: 300px;
+  z-index: 10;
+}
+
+.cbe-preview__menu[hidden] {
+  display: none;
+}
+
+.cbe-preview__menu .cbe-field {
+  margin: 0;
+}
+
+.cbe-preview__actions,
+.cbe-preview__member {
+  display: flex;
+  gap: 6px;
+}
+
+.cbe-preview__actions .cbe-button {
+  flex: 1;
+}
+
+.cbe-preview__member input {
+  flex: 1;
+  min-width: 0;
+}
+
+.cbe-preview__menu .cbe-description {
+  white-space: normal;
+}
+
+.cbe-preview__member input[aria-invalid='true'] {
+  box-shadow: inset 0 0 0 1px var(--cbe-error);
+}
+
+.cbe-preview__message {
+  color: var(--cbe-muted);
+  font-size: 12px;
+  margin: -6px 0 0;
+}
+
+.cbe-preview__message:empty {
+  display: none;
+}
+
+.cbe-preview__message.is-error {
+  color: var(--cbe-error);
+}
+
 /* A segmented control: the thumb travels to the chosen width */
 .cbe-viewports {
   background: var(--cbe-fill);

@@ -28,13 +28,44 @@
              data-preview="{{ preview_url }}"
              data-backend="{{ path('contao_backend') }}"
              data-picker="{{ path('contao_backend_picker') }}"
-             data-rich-editor="{{ assets.rich_editor_js }}">
+             data-rich-editor="{{ assets.rich_editor_js }}"
+             data-preview-menu="{{ assets.preview_menu_js }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">
                     <img class="cbe-logo" src="{{ app.request.basePath }}/bundles/contaoblockeditor/icon.svg" width="16" height="16" alt="">
                     <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
                     <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
+                </div>
+                {% set options = preview_options %}
+                <div class="cbe-preview">
+                    <button id="cbe-preview-toggle" class="cbe-icon-button" type="button" aria-expanded="false" aria-controls="cbe-preview-menu" aria-label="Vorschau" title="Vorschau: Adresse, Mitglied, nicht veröffentlichte Elemente"{% if options.member or options.show_unpublished %} data-active{% endif %}>
+                        <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M1.5 8S4 3.25 8 3.25 14.5 8 14.5 8 12 12.75 8 12.75 1.5 8 1.5 8Z"/><circle cx="8" cy="8" r="2.25"/></svg>
+                    </button>
+                    <form id="cbe-preview-menu" class="cbe-preview__menu" aria-label="Vorschau" data-switch="{{ options.switch_url }}" data-share="{{ options.share_url }}" hidden>
+                        <div class="cbe-preview__actions">
+                            <button class="cbe-button" type="button" data-preview-copy>URL kopieren</button>
+                            {% if options.share_url %}
+                                <button class="cbe-button" type="button" data-preview-share>URL teilen</button>
+                            {% endif %}
+                        </div>
+                        {% if options.can_switch_member %}
+                            <div class="cbe-field">
+                                <label for="cbe-preview-member">Mitglied</label>
+                                <div class="cbe-preview__member">
+                                    <input id="cbe-preview-member" type="text" name="user" list="cbe-preview-members" placeholder="Benutzername" value="{{ options.member }}" autocomplete="off" spellcheck="false" aria-describedby="cbe-preview-message">
+                                    <button class="cbe-button" type="submit">Anwenden</button>
+                                </div>
+                                <datalist id="cbe-preview-members"></datalist>
+                                <p class="cbe-description">Zeigt die Seite, wie das Mitglied sie sieht. Leer lassen für Gäste.</p>
+                            </div>
+                        {% endif %}
+                        <div class="cbe-field cbe-field--switch">
+                            <label for="cbe-preview-unpublished">Nicht veröffentlichte Elemente anzeigen</label>
+                            <input id="cbe-preview-unpublished" type="checkbox" name="unpublished" value="show"{% if options.show_unpublished %} checked{% endif %}>
+                        </div>
+                        <p id="cbe-preview-message" class="cbe-preview__message" role="status" aria-live="polite"></p>
+                    </form>
                 </div>
                 <div class="cbe-viewports" role="group" aria-label="Vorschaubreite">
                     <button class="cbe-viewport" type="button" data-viewport="desktop" aria-pressed="true" title="Volle Breite">Desktop</button>

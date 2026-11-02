@@ -6,6 +6,8 @@ namespace Pdir\ContaoBlockEditorBundle\Controller;
 
 use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\CoreBundle\Routing\ContentUrlGenerator;
+use Contao\CoreBundle\Security\Authentication\FrontendPreviewAuthenticator;
+use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
 use Contao\CoreBundle\Security\ContaoCorePermissions;
 use Contao\PageModel;
 use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
@@ -18,6 +20,7 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Exception\ExceptionInterface as RoutingException;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
+use Symfony\Component\Routing\RouterInterface;
 use Symfony\Component\Security\Csrf\CsrfTokenManagerInterface;
 use Twig\Environment;
 
@@ -37,6 +40,8 @@ final class EditorController
         private readonly string $csrfTokenName,
         private readonly string $previewScript,
         private readonly EditorAssets $assets,
+        private readonly TokenChecker $tokenChecker,
+        private readonly RouterInterface $router,
     ) {
     }
 
@@ -75,8 +80,8 @@ final class EditorController
             'title' => (string) $page->title,
             'extension_scripts' => $this->assets->extensionUrls($request->getBasePath()),
             'assets' => array_combine(
-                ['shell_css', 'shell_js', 'frame_js', 'frame_css', 'rich_editor_js', 'restore_settings_js'],
-                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js', 'frame.css', 'rich-editor.js', 'restore-settings.js']),
+                ['shell_css', 'shell_js', 'frame_js', 'frame_css', 'rich_editor_js', 'restore_settings_js', 'preview_menu_js'],
+                array_map(fn (string $file): string => $this->assets->url($file, $request->getBasePath()), ['shell.css', 'shell.js', 'frame.js', 'frame.css', 'rich-editor.js', 'restore-settings.js', 'preview-menu.js']),
             ),
         ];
 
@@ -96,9 +101,37 @@ final class EditorController
             $parameters['frame_url'] = $request->getBasePath().$this->previewScript.($parts['path'] ?? '/').'?'.EditorFrameListener::QUERY_PARAMETER.'=1';
             $parameters['preview_url'] = $request->getBasePath().$this->previewScript;
             $parameters['token'] = $this->csrfTokenManager->getToken($this->csrfTokenName)->getValue();
+            $parameters['preview_options'] = $this->previewOptions($request, $parameters['token']);
         }
 
         return $this->render($parameters);
+    }
+
+    /**
+     * What the preview toolbar of Contao offers, with the same permissions. Contao's own
+     * endpoint (contao_backend_switch) applies the changes, so its checks stay in force.
+     *
+     * @return array{switch_url: string, share_url: string|null, can_switch_member: bool, member: string, show_unpublished: bool}
+     */
+    private function previewOptions(Request $request, string $token): array
+    {
+        $shareUrl = null;
+
+        if ($this->security->isGranted(ContaoCorePermissions::USER_CAN_ACCESS_MODULE, 'preview_link')) {
+            // The shell adds the address of the page and whether unpublished elements show
+            $shareUrl = $this->router->generate('contao_backend', ['do' => 'preview_link', 'act' => 'create', 'rt' => $token, 'nb' => '1']);
+        }
+
+        // TokenChecker::isPreviewMode() only answers inside the preview, so read the session
+        $preview = $request->hasPreviousSession() ? $request->getSession()->get(FrontendPreviewAuthenticator::SESSION_NAME) : null;
+
+        return [
+            'switch_url' => $this->router->generate('contao_backend_switch'),
+            'share_url' => $shareUrl,
+            'can_switch_member' => $this->security->isGranted('ROLE_ALLOWED_TO_SWITCH_MEMBER'),
+            'member' => (string) $this->tokenChecker->getFrontendUsername(),
+            'show_unpublished' => \is_array($preview) && !empty($preview['showUnpublished']),
+        ];
     }
 
     /**

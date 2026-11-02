@@ -45,7 +45,7 @@ const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -895,6 +895,29 @@ function bindCornerSetting(): void {
     corners.addEventListener('change', () => showCorners(corners.checked, true));
   }
 }
+
+const previewToggle = document.getElementById('cbe-preview-toggle') as HTMLButtonElement | null;
+const previewMenu = document.getElementById('cbe-preview-menu') as HTMLFormElement | null;
+
+// Contao's preview toolbar: rarely needed, so its script only loads with the first click
+previewToggle?.addEventListener('click', () => {
+  (import(previewMenuUrl) as Promise<typeof import('./preview-menu')>)
+    .then(({ setupPreviewMenu }) => setupPreviewMenu(previewToggle, previewMenu as HTMLFormElement, {
+      token,
+      paths: framePaths,
+      frame,
+      frameHref,
+      // Saves first, like any other change of the page
+      reload: () => {
+        const href = frameHref();
+
+        if (href) {
+          void goTo(href, false);
+        }
+      },
+    })(true))
+    .catch((error: unknown) => console.error('[block-editor] Das Vorschau-Menü fehlt:', error));
+}, { once: true });
 
 window.history.replaceState({ frame: frame.src }, '');
 
