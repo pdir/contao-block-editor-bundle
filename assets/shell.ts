@@ -495,6 +495,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       checkbox.type = 'checkbox';
       checkbox.checked = Boolean(value) && value !== '0';
       checkbox.addEventListener('change', () => change(checkbox.checked ? '1' : ''));
+      wrapper.classList.add('cbe-field--switch');
       control = checkbox;
       break;
     }
@@ -775,6 +776,7 @@ const viewportButtons = [...document.querySelectorAll<HTMLButtonElement>('.cbe-v
 
 function showViewport(viewport: string): void {
   (frame.parentElement as HTMLElement).dataset.viewport = viewport;
+  (viewportButtons[0]?.parentElement as HTMLElement | undefined)?.setAttribute('data-active', viewport);
 
   for (const button of viewportButtons) {
     button.setAttribute('aria-pressed', String(button.dataset.viewport === viewport));

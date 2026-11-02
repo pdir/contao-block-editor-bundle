@@ -288,11 +288,11 @@ body {
   width: 66px;
 }
 
-.cbe-viewports:has(:nth-child(2)[aria-pressed='true'])::before {
+.cbe-viewports[data-active='tablet']::before {
   transform: translateX(100%);
 }
 
-.cbe-viewports:has(:nth-child(3)[aria-pressed='true'])::before {
+.cbe-viewports[data-active='mobile']::before {
   transform: translateX(200%);
 }
 
@@ -440,14 +440,14 @@ body {
 }
 
 /* A single yes or no reads as a switch; it stays a checkbox for assistive technology */
-.cbe-field:has(> input[type='checkbox']) {
+.cbe-field--switch {
   align-items: center;
   column-gap: 8px;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.cbe-field:has(> input[type='checkbox']) label {
+.cbe-field--switch label {
   cursor: pointer;
   margin: 0;
 }
@@ -497,7 +497,7 @@ body {
   margin-bottom: 0;
 }
 
-.cbe-field:has(> input[type='checkbox']) .cbe-description,
+.cbe-field--switch .cbe-description,
 .cbe-field--row .cbe-description {
   grid-column: 1 / -1;
 }

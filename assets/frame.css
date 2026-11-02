@@ -109,9 +109,9 @@ cto-toolbar,
   max-width: min(480px, calc(100vw - 16px));
   padding: 5px;
   border-radius: 12px;
-  background: light-dark(rgb(255 255 255 / 82%), rgb(44 44 46 / 82%));
+  background: rgb(255 255 255 / 82%);
   backdrop-filter: blur(24px) saturate(1.8);
-  color: light-dark(#1d1d1f, #f5f5f7);
+  color: #1d1d1f;
   box-shadow: 0 0 0 .5px rgb(0 0 0 / 22%), 0 10px 32px rgb(0 0 0 / 24%);
 }
 
@@ -124,7 +124,7 @@ cto-toolbar,
   border: 0;
   border-radius: 7px;
   background: none;
-  color: light-dark(#a85200, #ffa64d);
+  color: #a85200;
   font-weight: 500;
   cursor: pointer;
 }
@@ -134,7 +134,7 @@ cto-toolbar,
 }
 
 .cbe-link-bar :focus-visible {
-  outline: 2px solid light-dark(#a85200, #ffa64d);
+  outline: 2px solid #a85200;
 }
 
 .cbe-link-bar__url {
@@ -156,15 +156,39 @@ cto-toolbar,
 
 .cbe-link-bar__hint {
   padding: 0 7px;
-  color: light-dark(#636366, #aeaeb2);
+  color: #636366;
 }
 
 .cbe-link-bar__error {
   flex-basis: 100%;
   padding: 2px 7px;
-  color: light-dark(#c5221f, #ff8a80);
+  color: #c5221f;
 }
 
 .cbe-link-bar__error:empty {
   display: none;
+}
+
+/* Instead of light-dark(), which older browsers lack */
+@media (prefers-color-scheme: dark) {
+  .cbe-link-bar {
+    background: rgb(44 44 46 / 82%);
+    color: #f5f5f7;
+  }
+
+  .cbe-link-bar button {
+    color: #ffa64d;
+  }
+
+  .cbe-link-bar :focus-visible {
+    outline-color: #ffa64d;
+  }
+
+  .cbe-link-bar__hint {
+    color: #aeaeb2;
+  }
+
+  .cbe-link-bar__error {
+    color: #ff8a80;
+  }
 }
