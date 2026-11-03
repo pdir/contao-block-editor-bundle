@@ -185,6 +185,11 @@ final class ElementInspector
             $inline[] = self::INLINE_RICH[$type];
         }
 
+        // The cells of the core's table, each edited where it is shown
+        if ('table' === $type && \in_array('tableitems', $fields, true)) {
+            $inline[] = ['field' => 'tableitems', 'selector' => 'table', 'mode' => 'table'];
+        }
+
         return $inline;
     }
 
@@ -322,6 +327,14 @@ final class ElementInspector
 
         if (!empty($config['eval']['basicEntities'])) {
             $value = StringUtil::convertBasicEntities($value);
+        }
+
+        // Rows and cells as lists, also if the keys of the stored array have gaps
+        if ('tableWizard' === ($config['inputType'] ?? null)) {
+            $value = \is_array($value) ? array_values(array_map(
+                static fn (mixed $row): array => array_values(array_map(static fn (mixed $cell): string => \is_scalar($cell) ? (string) $cell : '', \is_array($row) ? $row : [$row])),
+                $value,
+            )) : [];
         }
 
         return $value;

@@ -9,6 +9,7 @@ import { readMessage } from './protocol';
 import { createRichEditor, editLink, renderFormatBar, richValue } from './rich-text';
 import { canEditInline } from './rich-text-policy';
 import { storedSingleKeys } from './settings';
+import { cellHtml, cellText, insertColumn, insertRow, isPlainCell, matchRows, removeColumn, removeRow, setCell, toRows, type Rows } from './table-data';
 import { isTyping, shortcutFor } from './shortcuts';
 import { findByText, wrapTextRun } from './text-target';
 
@@ -41,6 +42,8 @@ interface Session {
   showValue(): void;
   /** Runs last, when the content of the target is final. */
   restore?(): void;
+  /** Where the bar goes instead of above the target, e.g. above the whole table. */
+  barAnchor?: HTMLElement;
 }
 
 let session: Session | null = null;
@@ -128,6 +131,13 @@ function inlineTarget(inline: InlineConfig, root: HTMLElement, shown?: unknown):
 
 /** The part under the pointer, otherwise the element's main text. */
 function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget | null): InlineConfig | null {
+  const table = element.inline.find(({ mode }) => mode === 'table');
+  const cell = hit instanceof Element ? hit.closest('td, th') : null;
+
+  if (table && cell && root.querySelector(table.selector ?? 'table')?.contains(cell)) {
+    return table;
+  }
+
   const plains = element.inline.filter(({ mode }) => mode === 'plain');
   const riches = element.inline.filter(({ mode }) => mode === 'rich');
   const plain = plains.find(({ section }) => !section);
@@ -149,7 +159,7 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
     return riches[0];
   }
 
-  return !hit && plainTarget ? (plain as InlineConfig) : null;
+  return !hit && plainTarget ? (plain as InlineConfig) : !hit && table ? table : null;
 }
 
 function toShell(message: ToShell): void {
@@ -362,6 +372,207 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
   return true;
 }
 
+/** The row of the data that a row of the table shows: header and footer at the ends. */
+function dataRow(table: HTMLTableElement, row: HTMLTableRowElement, rows: Rows): number {
+  const head = table.tHead?.rows.length ?? 0;
+  const foot = table.tFoot?.rows.length ?? 0;
+  const all = Array.from(table.rows);
+  const body = all.slice(head, all.length - foot);
+  const at = all.indexOf(row);
+
+  if (at < head) {
+    return at;
+  }
+
+  if (at >= all.length - foot) {
+    return rows.length - (all.length - at);
+  }
+
+  const textOf = (cells: string[]): string[] => cells.map((cell) => cellText(cell.replace(/<[^>]*>/g, ' ')));
+  const matched = matchRows(body.map((tr) => Array.from(tr.cells, (cell) => cell.textContent ?? '')), rows.slice(head, rows.length - foot).map(textOf));
+
+  return head + (matched[at - head] ?? at - head);
+}
+
+/** The clicked cell, or the first one of the body for the keyboard. */
+function startTable(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
+  const table = root.querySelector<HTMLTableElement>(inline.selector ?? 'table');
+  const hit = event?.target instanceof Element ? event.target.closest<HTMLTableCellElement>('td, th') : table?.tBodies[0]?.rows[0]?.cells[0];
+
+  return Boolean(table && hit && hit.closest('table') === table && startCell(element, inline, table, hit, event));
+}
+
+/** A cell of a table: typed in place, Tab moves on, the bar adds and removes rows and columns. */
+function startCell(element: FrameElement, inline: InlineConfig, table: HTMLTableElement, cell: HTMLTableCellElement, event: PointerEvent | null): boolean {
+  const { field } = inline;
+  const rows = toRows(element.values[field]);
+  const row = cell.parentElement as HTMLTableRowElement;
+  const r = dataRow(table, row, rows);
+  const c = cell.cellIndex;
+  const html = rows[r]?.[c];
+
+  // Markup in a cell can only be kept in the inspector
+  if (html === undefined || !isPlainCell(html)) {
+    return false;
+  }
+
+  const state = snapshot(element, inline, cell);
+
+  cell.innerText = cellText(html);
+
+  try {
+    cell.contentEditable = 'plaintext-only';
+  } catch {
+    cell.contentEditable = 'true';
+  }
+
+  cell.focus();
+
+  if (event) {
+    placeCaret(event.clientX, event.clientY);
+  } else {
+    // Reached with Tab, as in a spreadsheet: typing replaces the content
+    getSelection()?.selectAllChildren(cell);
+  }
+
+  const save = (next: Rows): void => {
+    element.values[field] = next;
+    toShell({ type: 'cbe:change', id: element.id, field, value: next });
+  };
+
+  const onInput = (): void => save(setCell(toRows(element.values[field]), r, c, cellHtml(cell.innerText.replace(/\n$/, ''))));
+
+  const cells = (): HTMLTableCellElement[] => Array.from(table.rows).flatMap((tr) => Array.from(tr.cells));
+
+  const moveTo = (next: HTMLTableCellElement | undefined): void => {
+    endSession();
+
+    if (next) {
+      startCell(element, inline, table, next, null);
+    }
+  };
+
+  let addRow = (): HTMLTableRowElement => row;
+
+  const onKeydown = (event: KeyboardEvent): void => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      endSession();
+    } else if (event.key === 'Tab') {
+      const all = cells();
+      const next = all[all.indexOf(cell) + (event.shiftKey ? -1 : 1)];
+
+      // As in a word processor: Tab in the last cell adds a row
+      if (next || !event.shiftKey) {
+        event.preventDefault();
+        moveTo(next ?? addRow().cells[0]);
+      }
+    }
+  };
+
+  cell.addEventListener('input', onInput);
+  cell.addEventListener('keydown', onKeydown);
+
+  const inBody = row.parentElement !== table.tHead && row.parentElement !== table.tFoot;
+  const bodyRows = table.tBodies[0]?.rows.length ?? 0;
+  const tool = (icon: keyof typeof ICONS, title: string, enabled: boolean, run: () => HTMLTableCellElement | undefined): HTMLButtonElement => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.title = title;
+    button.setAttribute('aria-label', title);
+    button.disabled = !enabled;
+    button.append(iconElement(document, ICONS[icon]));
+    button.addEventListener('pointerdown', (down) => down.preventDefault());
+    button.addEventListener('click', () => {
+      // The structure changes: the data first, then the same in the page
+      const target = run();
+      moveTo(target);
+    });
+
+    return button;
+  };
+
+  const blank = (tag: string): HTMLTableCellElement => {
+    const created = document.createElement(tag) as HTMLTableCellElement;
+
+    if (tag === 'th' && row.parentElement !== table.tHead) {
+      created.scope = 'row';
+    }
+
+    return created;
+  };
+
+  /** Below this row: the header gets the first row of the body, the footer the last one. */
+  addRow = (): HTMLTableRowElement => {
+    const at = row.parentElement === table.tHead ? 1 : row.parentElement === table.tFoot ? r : r + 1;
+    const tr = document.createElement('tr');
+    const first = table.tBodies[0]?.rows[0]?.cells[0];
+
+    tr.append(...Array.from(row.cells, (_, index) => blank(index === 0 && first?.tagName === 'TH' ? 'th' : 'td')));
+    save(insertRow(toRows(element.values[field]), at));
+
+    if (inBody) {
+      row.after(tr);
+    } else if (row.parentElement === table.tHead) {
+      table.tBodies[0]?.prepend(tr);
+    } else {
+      table.tBodies[0]?.append(tr);
+    }
+
+    return tr;
+  };
+
+  formatBar.setAttribute('role', 'toolbar');
+  formatBar.setAttribute('aria-label', 'Tabelle');
+  formatBar.replaceChildren(
+    tool('rowAfter', 'Zeile darunter einfügen', true, () => addRow().cells[c]),
+    tool('columnAfter', 'Spalte rechts einfügen', true, () => {
+      save(insertColumn(toRows(element.values[field]), c + 1));
+
+      for (const tr of Array.from(table.rows)) {
+        tr.cells[c]?.after(blank(tr.parentElement === table.tHead ? 'th' : 'td'));
+      }
+
+      return row.cells[c + 1];
+    }),
+    tool('rowDelete', 'Zeile löschen', inBody && bodyRows > 1, () => {
+      const next = (row.nextElementSibling ?? row.previousElementSibling) as HTMLTableRowElement | null;
+
+      save(removeRow(toRows(element.values[field]), r));
+      row.remove();
+
+      return next?.cells[c];
+    }),
+    tool('columnDelete', 'Spalte löschen', row.cells.length > 1, () => {
+      save(removeColumn(toRows(element.values[field]), c));
+
+      for (const tr of Array.from(table.rows)) {
+        tr.cells[c]?.remove();
+      }
+
+      return row.cells[Math.min(c, row.cells.length - 1)];
+    }),
+  );
+  formatBar.hidden = false;
+
+  session = {
+    ...state,
+    cleanup() {
+      cell.removeEventListener('input', onInput);
+      cell.removeEventListener('keydown', onKeydown);
+      cell.removeAttribute('contenteditable');
+    },
+    // The text is in place already, as it was typed
+    showValue() {},
+    // Above the cell, it would cover the row above
+    barAnchor: table,
+  };
+
+  placeFormatBar();
+
+  return true;
+}
+
 function endSession(): void {
   linkBar.hide();
   nav?.end();
@@ -399,7 +610,7 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
   let caretPlaced = false;
 
   if (inline) {
-    caretPlaced = inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
+    caretPlaced = inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
   }
 
   if (session) {
@@ -629,7 +840,7 @@ function addParentButton(root: HTMLElement): void {
 }
 
 function placeFormatBar(): void {
-  const target = session?.target;
+  const target = session?.barAnchor ?? session?.target;
 
   if (!target || formatBar.hidden) {
     return;
@@ -994,6 +1205,14 @@ document.addEventListener('click', (event) => {
 
 document.addEventListener('submit', (event) => event.preventDefault(), true);
 
+// While typing, the page's own shortcuts must not take the keys, such as "/" for its search.
+// Added on the way down, the listener stops the key at the text, after the editor had it.
+document.addEventListener('keydown', (event) => {
+  if (session && event.key.length === 1 && !event.ctrlKey && !event.metaKey && event.target instanceof Node && session.target.contains(event.target)) {
+    event.target.addEventListener('keydown', (typed) => typed.stopPropagation(), { once: true });
+  }
+}, true);
+
 document.addEventListener('keydown', (event) => {
   const shortcut = shortcutFor(event, storedSingleKeys());
 
@@ -1201,6 +1420,15 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
 
   if (editing) {
     endSession();
+  }
+
+  // Only the server knows how the cells look: a rejected change is rendered by it again
+  if (inline.mode === 'table') {
+    if (force) {
+      void refresh(id);
+    }
+
+    return;
   }
 
   const root = findElement(id);

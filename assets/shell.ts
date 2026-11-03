@@ -13,7 +13,7 @@ interface FieldSchema {
   name: string;
   label: string;
   description: string;
-  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit';
+  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard';
   rich: boolean;
   multiple: boolean;
   mandatory: boolean;
@@ -50,7 +50,7 @@ const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 const undoButton = document.getElementById('cbe-undo') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl, undo: undoUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter' | 'undo', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl, undo: undoUrl, tableField: tableFieldUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter' | 'undo' | 'tableField', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -635,6 +635,9 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
   statusAfterLoad = null;
 }
 
+/** Loaded with the first table. */
+let tableField: Promise<typeof import('./table-field')> | null = null;
+
 function createField(element: Element, field: FieldSchema): HTMLElement {
   const wrapper = document.createElement('div');
   wrapper.className = 'cbe-field';
@@ -662,6 +665,27 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       textarea.addEventListener('input', () => change(textarea.value));
       fieldSync.set(field.name, (next) => { textarea.value = String(next ?? ''); });
       control = field.rich ? richControl(element, field, textarea, change) : textarea;
+      break;
+    }
+    case 'tableWizard': {
+      const holder = document.createElement('div');
+      const flag = (name: string): boolean => Boolean(element.values[name]) && element.values[name] !== '0';
+
+      holder.setAttribute('role', 'group');
+      holder.setAttribute('aria-label', field.label);
+      tableField ??= import(tableFieldUrl) as Promise<typeof import('./table-field')>;
+      tableField.then(({ createTableField }) => {
+        // The inspector may show another element by now
+        if (!holder.isConnected) {
+          return;
+        }
+
+        const table = createTableField({ label: field.label, value: element.values[field.name], header: flag('thead'), footer: flag('tfoot'), change });
+
+        holder.append(table.root);
+        fieldSync.set(field.name, (next) => table.sync(next));
+      }).catch((error: unknown) => console.error('[block-editor] Die Tabelle fehlt:', error));
+      control = holder;
       break;
     }
     case 'select':
@@ -779,7 +803,8 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
 
   wrapper.append(label, control);
 
-  if (field.description) {
+  // The table wizard's description is about its form in the back end
+  if (field.description && field.input !== 'tableWizard') {
     const description = document.createElement('p');
     description.className = 'cbe-description';
     description.textContent = field.description;

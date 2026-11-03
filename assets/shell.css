@@ -1039,3 +1039,44 @@ body {
     transition: none !important;
   }
 }
+
+/* The cells of a table in the inspector, scrolling sideways when there are many columns */
+.cbe-table-field__scroll {
+  margin: 0 -4px;
+  overflow-x: auto;
+  padding: 0 4px 4px;
+  scrollbar-width: thin;
+}
+
+.cbe-table-field__grid {
+  border-collapse: separate;
+  border-spacing: 0 4px;
+  margin-top: -4px;
+}
+
+.cbe-table-field__grid td {
+  padding: 0 4px 0 0;
+}
+
+.cbe-field .cbe-table-field__grid textarea {
+  field-sizing: content;
+  min-height: 32px;
+  min-width: 112px;
+  resize: none;
+}
+
+.cbe-table-field__grid :is(.is-header, .is-footer) textarea {
+  font-weight: 600;
+}
+
+.cbe-table-field__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.cbe-button--small {
+  font-size: 12px;
+  padding: 4px 10px;
+}

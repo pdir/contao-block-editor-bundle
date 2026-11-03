@@ -33,6 +33,7 @@ final class FieldPolicyTest extends TestCase
             yield "protected column $field" => [$field, $text, false];
         }
 
+        yield 'table' => ['tableitems', ['inputType' => 'tableWizard', 'sql' => 'blob', 'eval' => ['multiple' => true, 'allowHtml' => true]], true];
         yield 'unfiltered html' => ['unfilteredHtml', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['preserveTags' => true]], false];
         yield 'code editor' => ['code', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['rte' => 'ace|html']], false];
         yield 'raw request data' => ['raw', [...$text, 'eval' => ['useRawRequestData' => true]], false];

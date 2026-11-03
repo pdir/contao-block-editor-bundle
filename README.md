@@ -33,6 +33,8 @@ gespeichert.
 Neue Elemente kommen über das Plus unter dem Griff oder den Button „Element darunter einfügen“ im Inspector unter das
 gewählte Element. Zur Wahl stehen die Elementtypen, die der Benutzer an dieser Stelle anlegen darf, auch in verschachtelten
 Elementen; das neue Element erhält die Standardwerte aus dem DCA und öffnet sich gleich zum Schreiben.
+Tabellen werden Zelle für Zelle in der Seite bearbeitet: Tab springt zur nächsten Zelle, die Leiste über der Tabelle
+fügt Zeilen und Spalten ein oder löscht sie. Zellen mit HTML und alle Zellen per Tastatur bearbeitet der Inspector.
 „Löschen“ im Inspector entfernt das gewählte Element samt verschachtelter Elemente, wenn der Benutzer es löschen darf.
 Wie im Backend landet es in „Wiederherstellen“; direkt danach holt „Rückgängig“ in der Kopfzeile es zurück.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu

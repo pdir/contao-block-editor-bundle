@@ -19,6 +19,9 @@ use Symfony\Component\HttpFoundation\RequestStack;
  */
 final class RecordWriter
 {
+    private const MAX_TABLE_ROWS = 500;
+    private const MAX_TABLE_COLUMNS = 50;
+
     public function __construct(private readonly RequestStack $requestStack)
     {
     }
@@ -38,6 +41,10 @@ final class RecordWriter
 
         if (\is_array($value) !== $expectsArray || (!\is_array($value) && !\is_scalar($value))) {
             throw new ApiException(400, 'Ungültiger Wert.');
+        }
+
+        if ('tableWizard' === $config['inputType'] && !self::isTable($value)) {
+            throw new ApiException(400, 'Ungültige Tabelle.');
         }
 
         $class = $GLOBALS['BE_FFL'][$config['inputType']] ?? null;
@@ -99,6 +106,32 @@ final class RecordWriter
         return ['save' => true, 'value' => $newValue];
     }
 
+
+    /**
+     * Rows of cells, as the table wizard of the back end sends them: all rows equally long.
+     */
+    public static function isTable(mixed $value): bool
+    {
+        if (!\is_array($value) || !array_is_list($value) || \count($value) > self::MAX_TABLE_ROWS) {
+            return false;
+        }
+
+        $width = null;
+
+        foreach ($value as $row) {
+            if (!\is_array($row) || !array_is_list($row) || [] === $row || \count($row) > self::MAX_TABLE_COLUMNS || ($width ??= \count($row)) !== \count($row)) {
+                return false;
+            }
+
+            foreach ($row as $cell) {
+                if (!\is_string($cell)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
 
     public function runRecordCallbacks(string $table, string $key, EditorDataContainer $dc): void
     {
