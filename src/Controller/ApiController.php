@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pdir\ContaoBlockEditorBundle\Controller;
 
 use Contao\CoreBundle\Exception\AccessDeniedException;
+use Pdir\ContaoBlockEditorBundle\Element\ElementCreator;
 use Pdir\ContaoBlockEditorBundle\Element\ElementInspector;
 use Pdir\ContaoBlockEditorBundle\Element\ElementMover;
 use Pdir\ContaoBlockEditorBundle\Element\ElementUpdater;
@@ -28,6 +29,7 @@ final class ApiController
         private readonly ElementInspector $inspector,
         private readonly ElementUpdater $updater,
         private readonly ElementMover $mover,
+        private readonly ElementCreator $creator,
         private readonly PageInspector $pages,
         private readonly PageUpdater $pageUpdater,
         private readonly ReaderRecord $records,
@@ -67,6 +69,38 @@ final class ApiController
             $response->isNotModified($request);
 
             return $response;
+        });
+    }
+
+    /**
+     * The types that can be added next to an element.
+     */
+    #[Route('/elements/{id}/types', name: 'pdir_block_editor_api_types', requirements: ['id' => '[1-9]\d{0,9}'], methods: ['GET'])]
+    public function types(Request $request, int $id): Response
+    {
+        return $this->handle(function () use ($request, $id): Response {
+            $this->guard->assertCanRead($request);
+
+            return $this->json(['groups' => $this->creator->types($id)]);
+        });
+    }
+
+    #[Route('/elements', name: 'pdir_block_editor_api_create', methods: ['POST'])]
+    public function create(Request $request): Response
+    {
+        return $this->handle(function () use ($request): Response {
+            $this->guard->assertCanWrite($request);
+
+            $data = $this->guard->decodeJsonBody($request);
+            $target = $data['target'] ?? null;
+            $position = $data['position'] ?? null;
+            $type = $data['type'] ?? null;
+
+            if (!\is_int($target) || $target < 1 || !\in_array($position, ElementMover::POSITIONS, true) || !\is_string($type) || 1 !== preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $type)) {
+                throw new ApiException(400, 'Ungültige Anfrage.');
+            }
+
+            return $this->json($this->creator->create($target, $position, $type), 201);
         });
     }
 

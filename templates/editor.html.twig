@@ -33,7 +33,8 @@
              data-pages="{{ path('pdir_block_editor_api_pages') }}"
              data-nav-pages="{{ assets.nav_pages_js }}"
              data-records="{{ path('pdir_block_editor_api_pages')|replace({'/pages': '/records'}) }}"
-             data-reader-record="{{ assets.reader_record_js }}">
+             data-reader-record="{{ assets.reader_record_js }}"
+             data-inserter="{{ assets.inserter_js }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">
@@ -103,6 +104,8 @@
                             <dd>Reinklicken und tippen, <kbd>Esc</kbd> beendet.</dd>
                             <dt>Verschieben</dt>
                             <dd>Griff <span class="cbe-help-handle" aria-hidden="true"><svg viewBox="0 0 8 12" width="8" height="12" fill="currentColor"><circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/><circle cx="2" cy="6" r="1.1"/><circle cx="6" cy="6" r="1.1"/><circle cx="2" cy="10" r="1.1"/><circle cx="6" cy="10" r="1.1"/></svg></span> ziehen oder <kbd data-key="alt">Alt</kbd> + <kbd>↑</kbd>/<kbd>↓</kbd>.</dd>
+                            <dt>Neues Element</dt>
+                            <dd>Plus unter dem Griff oder „Element darunter einfügen“ im Inspector.</dd>
                             <dt>Links</dt>
                             <dd>Klick im Text: <em>Öffnen</em> oder <em>Bearbeiten</em>. Neu: Text markieren, <kbd data-key="mod">Strg</kbd> + <kbd>K</kbd>.</dd>
                             <dt>Seite wechseln</dt>
@@ -166,6 +169,18 @@
                 <div class="cbe-picker__actions">
                     <button class="cbe-button" type="button" data-picker-cancel>Abbrechen</button>
                     <button class="cbe-button cbe-button--primary" type="button" data-picker-apply>Übernehmen</button>
+                </div>
+            </dialog>
+            <dialog id="cbe-inserter" class="cbe-picker cbe-inserter" aria-labelledby="cbe-inserter-title">
+                <h2 id="cbe-inserter-title">Element einfügen</h2>
+                <div class="cbe-field">
+                    <label for="cbe-inserter-search">Elementtyp suchen</label>
+                    <input id="cbe-inserter-search" type="search" autocomplete="off" spellcheck="false" aria-describedby="cbe-inserter-message">
+                </div>
+                <div class="cbe-inserter__list"></div>
+                <p id="cbe-inserter-message" class="cbe-inserter__message" role="status"></p>
+                <div class="cbe-picker__actions">
+                    <button class="cbe-button" type="button" data-inserter-cancel>Abbrechen</button>
                 </div>
             </dialog>
         </div>

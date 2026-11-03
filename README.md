@@ -30,6 +30,9 @@ Auf der Detailseite einer Nachricht oder eines Events lassen sich der Titel (bei
 direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends. Ist kein Element
 ausgewählt, zeigt der Inspector Seitentitel und Beschreibung der aktuellen Seite für Suchmaschinen; sie werden ebenso
 gespeichert.
+Neue Elemente kommen über das Plus unter dem Griff oder den Button „Element darunter einfügen“ im Inspector unter das
+gewählte Element. Zur Wahl stehen die Elementtypen, die der Benutzer an dieser Stelle anlegen darf, auch in verschachtelten
+Elementen; das neue Element erhält die Standardwerte aus dem DCA und öffnet sich gleich zum Schreiben.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu
 bewegen: Dann führt jeder Link zu seiner Seite. Jeder neue Editor startet mit eingeschaltetem Bearbeiten.
 Die Tastaturbefehle erklärt der Inspector unter „Globale Tastaturbefehle“ (Taste `?`). Einzelne Tasten wirken nur,
@@ -37,7 +40,7 @@ wenn gerade kein Text bearbeitet wird, und lassen sich für Screenreader abschal
 Strg/⌘ + Umschalt + Komma für den Inspector. Kombinationen der Browser und Tasten, die Zeichen erzeugen (⌥ auf dem Mac,
 AltGr unter Windows), bleiben unberührt.
 
-Noch offen: Inserter, Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
+Noch offen: Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
 Responsive-Vorschau und die Erweiterungs-API. Felder, die der Editor noch nicht unterstützt, bleiben über den Link
 „Im klassischen Backend bearbeiten“ erreichbar.
 

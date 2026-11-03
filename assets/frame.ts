@@ -19,6 +19,9 @@ const HANDLE_SPACE = 30;
 const HANDLE_CORNER = 32;
 const HANDLE_MARGIN = 8;
 const HANDLE_SWITCH_DELAY = 200;
+/** The button for a new element, below the handle. */
+const HANDLE_GAP = 32;
+const ADDER_HEIGHT = 28;
 
 const known = new Map<number, FrameElement>();
 
@@ -650,6 +653,22 @@ handle.draggable = true;
 handle.tabIndex = -1;
 handle.setAttribute('aria-hidden', 'true');
 
+// A new element below this one. Mouse only as well: the inspector has a button for it
+const adder = document.createElement('button');
+adder.type = 'button';
+adder.className = 'cbe-handle cbe-handle--add';
+adder.title = 'Element darunter einfügen';
+adder.tabIndex = -1;
+adder.setAttribute('aria-hidden', 'true');
+adder.addEventListener('click', () => {
+  const id = Number(handleRoot?.getAttribute(ID_ATTRIBUTE));
+
+  if (id) {
+    endSession();
+    toShell({ type: 'cbe:insert', id });
+  }
+});
+
 const dropLine = document.createElement('div');
 dropLine.className = 'cbe-drop-line';
 dropLine.setAttribute('aria-hidden', 'true');
@@ -664,19 +683,23 @@ let pointerY = 0;
 
 function placeHandle(): void {
   if (!handleRoot?.isConnected) {
-    handle.hidden = true;
+    handle.hidden = adder.hidden = true;
     handleRoot = null;
 
     return;
   }
 
-  const { left, right, top } = handleRoot.getBoundingClientRect();
+  const { left, right, top, bottom } = handleRoot.getBoundingClientRect();
   const fitsBeside = left >= HANDLE_SPACE;
+  const x = `${fitsBeside ? left - HANDLE_SPACE : right - HANDLE_SPACE}px`;
+  const handleTop = Math.max(top, 2);
 
   // Inside of the element it would cover text, which must not happen while typing
-  handle.hidden = !fitsBeside && session?.element.id === Number(handleRoot.getAttribute(ID_ATTRIBUTE));
-  handle.style.left = `${fitsBeside ? left - HANDLE_SPACE : right - HANDLE_SPACE}px`;
-  handle.style.top = `${Math.max(top, 2)}px`;
+  handle.hidden = adder.hidden = !fitsBeside && session?.element.id === Number(handleRoot.getAttribute(ID_ATTRIBUTE));
+  handle.style.left = adder.style.left = x;
+  handle.style.top = `${handleTop}px`;
+  // At the bottom edge, where the new element goes, but below the handle and in the window
+  adder.style.top = `${Math.max(handleTop + HANDLE_GAP, Math.min(bottom - ADDER_HEIGHT, window.innerHeight - ADDER_HEIGHT - 2))}px`;
 }
 
 function hideDropLine(): void {
@@ -690,9 +713,11 @@ function isTowardsHandle(x: number, y: number): boolean {
     return false;
   }
 
-  const { left, right, top, bottom } = handle.getBoundingClientRect();
+  const { left, right, top } = handle.getBoundingClientRect();
+  const { bottom } = adder.getBoundingClientRect();
   const edge = Math.max(right + HANDLE_MARGIN, handleRoot.getBoundingClientRect().left + HANDLE_CORNER);
 
+  // Also on the way down to the button for a new element
   return x >= left - HANDLE_MARGIN && x <= edge && y >= top - HANDLE_MARGIN && y <= bottom + HANDLE_MARGIN;
 }
 
@@ -848,7 +873,7 @@ document.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  if (event.target === handle || (event.target instanceof Node && (linkBar.root.contains(event.target) || formatBar.contains(event.target)))) {
+  if (event.target === handle || event.target === adder || (event.target instanceof Node && (linkBar.root.contains(event.target) || formatBar.contains(event.target)))) {
     return;
   }
 
@@ -1026,8 +1051,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 function applyElements(elements: FrameElement[]): void {
-  document.body.append(handle, dropLine, linkBar.root, formatBar);
-  handle.hidden = true;
+  document.body.append(handle, adder, dropLine, linkBar.root, formatBar);
+  handle.hidden = adder.hidden = true;
   dropLine.hidden = true;
 
   for (const element of elements) {
@@ -1055,7 +1080,43 @@ function prepareRoot(root: HTMLElement): void {
   }
 }
 
-async function refresh(id: number): Promise<void> {
+/**
+ * A new element goes where the server rendered it. Some parents wrap each child, such as the
+ * slides of a slider: the wrapper comes along, next to the wrapper of the previous element.
+ */
+function placeNew(fresh: HTMLElement, after: number): HTMLElement | null {
+  const freshPrevious = fresh.ownerDocument.querySelector(`[${ID_ATTRIBUTE}="${after}"]`);
+  let previous: Element | null = findElement(after);
+  let branch: Element = fresh;
+  let other = freshPrevious;
+
+  while (branch.parentElement && freshPrevious && !branch.parentElement.contains(freshPrevious)) {
+    branch = branch.parentElement;
+  }
+
+  while (other && previous && other.parentElement !== branch.parentElement) {
+    other = other.parentElement;
+    previous = previous.parentElement;
+  }
+
+  if (!other || !previous) {
+    return null;
+  }
+
+  previous.after(document.importNode(branch, true));
+
+  return findElement(Number(fresh.getAttribute(ID_ATTRIBUTE)));
+}
+
+/** Brings a new element into view and opens its main text. */
+function showNew(id: number, root: HTMLElement): void {
+  root.scrollIntoView({ block: 'center', behavior: 'instant' });
+  root.focus({ preventScroll: true });
+  showHandleOn(root);
+  activate(id, root, null);
+}
+
+async function refresh(id: number, after?: number, show = false): Promise<void> {
   if (session?.element.id === id) {
     return;
   }
@@ -1084,6 +1145,17 @@ async function refresh(id: number): Promise<void> {
 
     if (freshHeadline) {
       sectionButton(replacement)?.replaceChildren(...Array.from(freshHeadline.childNodes, (node) => document.importNode(node, true)));
+    }
+  } else if (fresh && after) {
+    // An element without content may render nothing yet: it shows up with its first save
+    const root = placeNew(fresh, after);
+
+    if (root) {
+      prepareRoot(root);
+
+      if (show && known.has(id)) {
+        showNew(id, root);
+      }
     }
   }
 }
@@ -1145,7 +1217,7 @@ window.addEventListener('message', (event) => {
       applyValue(message.id, message.field, message.value, true);
       break;
     case 'cbe:refresh':
-      void refresh(message.id);
+      void refresh(message.id, message.after, message.show);
       break;
     case 'cbe:nav-edit':
       nav?.enable(message.enabled);

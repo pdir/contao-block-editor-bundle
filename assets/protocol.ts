@@ -52,7 +52,11 @@ export type ToFrame =
   | { type: 'cbe:end' }
   | { type: 'cbe:elements'; elements: FrameElement[] }
   | { type: 'cbe:value'; id: number; field: string; value: unknown }
-  | { type: 'cbe:refresh'; id: number }
+  /**
+   * A new element is not in the page yet: it goes next to the one it was added after. Shown
+   * means it is brought into view and its text is opened.
+   */
+  | { type: 'cbe:refresh'; id: number; after?: number; show?: boolean }
   /** Brings an element into view, for example the one opened from the back end. */
   | { type: 'cbe:show'; id: number }
   /** Null if the picker was closed without a choice. */
@@ -73,6 +77,8 @@ export type ToShell =
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
   | { type: 'cbe:commit'; id: number; render: boolean }
   | { type: 'cbe:move'; id: number; target: number; position: MovePosition }
+  /** A new element after this one. */
+  | { type: 'cbe:insert'; id: number }
   | { type: 'cbe:pick-link'; id: number; value: string }
   | { type: 'cbe:nav-links'; urls: string[] }
   | { type: 'cbe:page-select'; id: number }

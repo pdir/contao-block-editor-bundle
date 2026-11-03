@@ -96,6 +96,17 @@ cto-toolbar,
   background: radial-gradient(circle, currentColor 1.2px, transparent 1.7px) 0 0 / 5px 5px;
 }
 
+/* A plus: new element below */
+.cbe-handle.cbe-handle--add,
+.cbe-handle.cbe-handle--add:active {
+  cursor: pointer;
+}
+
+.cbe-handle--add::before {
+  inset: 0;
+  background: linear-gradient(currentColor 0 0) center / 12px 1.5px no-repeat, linear-gradient(currentColor 0 0) center / 1.5px 12px no-repeat;
+}
+
 .cbe-handle:hover {
   background: #f47c00;
   color: #fff;

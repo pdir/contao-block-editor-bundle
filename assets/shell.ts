@@ -48,7 +48,7 @@ const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -76,6 +76,8 @@ let saveFailed = false;
 let navigation = 0;
 let hasLeftStart = false;
 const awaitingRender = new Set<number>();
+/** New elements by the element they were added after, until the page shows them. */
+const insertedAfter = new Map<number, number>();
 /** Fields last changed by typing in the page: the page shows them correctly already. */
 const typedInPage = new Set<string>();
 /** Fields that extensions changed during the current saves, shown once these are done. */
@@ -114,7 +116,7 @@ function fieldsOf(element: Element): FieldSchema[] {
 
 function renderAwaited(): void {
   for (const id of awaitingRender) {
-    post({ type: 'cbe:refresh', id });
+    post({ type: 'cbe:refresh', id, after: insertedAfter.get(id) });
   }
 
   awaitingRender.clear();
@@ -206,7 +208,7 @@ const queue = new SaveQueue(send, {
     }
 
     if (needsRender) {
-      post({ type: 'cbe:refresh', id });
+      post({ type: 'cbe:refresh', id, after: insertedAfter.get(id) });
     }
   },
   onFailed(id, sent, error) {
@@ -254,10 +256,87 @@ async function moveElement(id: number, target: number, position: MovePosition): 
   }
 }
 
+/** Loaded with the first new element. */
+let inserter: Promise<(url: string) => Promise<string | null>> | null = null;
+
+/** Asks for the type, then adds the element after the given one and opens it. */
+async function insertAfter(target: number): Promise<void> {
+  const load = currentLoad;
+
+  inserter ??= (import(inserterUrl) as Promise<typeof import('./inserter')>).then(({ setupInserter }) => setupInserter(document.getElementById('cbe-inserter') as HTMLDialogElement));
+
+  const type = await (await inserter)(`${api}/${target}/types`);
+
+  if (!type || load !== currentLoad) {
+    return;
+  }
+
+  setStatus('Wird eingefügt …', false, 'busy');
+
+  // Like a move, it can renumber the siblings
+  let done = (): void => {};
+  const previous = moving;
+  moving = new Promise((resolve) => { done = resolve; });
+
+  try {
+    await previous;
+    await queue.settle();
+
+    const response = await fetch(api, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Block-Editor-Token': token },
+      body: JSON.stringify({ target, position: 'after', type }),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as { error?: string; element?: Element; revisions?: Record<string, string> };
+
+    if (!response.ok || !data.element) {
+      throw new Error(data.error ?? 'Einfügen fehlgeschlagen.');
+    }
+
+    for (const [sibling, revision] of Object.entries(data.revisions ?? {})) {
+      queue.setRevision(Number(sibling), revision);
+    }
+
+    const element = data.element;
+
+    if (!schema[element.type]) {
+      const { types } = await getJson<{ types: Record<string, TypeSchema> }>(`${schemaUrl}?types=${element.type}`);
+      schema = { ...schema, ...types };
+    }
+
+    if (load !== currentLoad) {
+      return;
+    }
+
+    elements.set(element.id, element);
+    insertedAfter.set(element.id, target);
+
+    if (element.editable) {
+      const inline = inlineOf(element);
+
+      queue.track(element.id, element.revision);
+      post({ type: 'cbe:elements', elements: [{ id: element.id, inline, values: Object.fromEntries(inline.map(({ field }) => [field, element.values[field]])) }] });
+    }
+
+    post({ type: 'cbe:refresh', id: element.id, after: target, show: true });
+    selected = element.id;
+    selectedPage = null;
+    recordSelected = false;
+    renderInspector();
+    setStatus(`Eingefügt: ${schema[element.type]?.label ?? element.type}`, false, 'saved');
+  } catch (error) {
+    setStatus(error instanceof Error && !(error instanceof TypeError) ? error.message : 'Einfügen fehlgeschlagen. Bitte die Verbindung prüfen.', true);
+  } finally {
+    done();
+  }
+}
+
 /** Forgets the previous page. The queue stays: its entries are replaced when tracked again. */
 function resetPage(): void {
   elements.clear();
   awaitingRender.clear();
+  insertedAfter.clear();
   typedInPage.clear();
   sideEffects.clear();
   selected = null;
@@ -770,11 +849,18 @@ function renderInspector(): void {
     inspector.append(createField(element, field));
   }
 
+  // Also the keyboard's way to a new element
+  const add = document.createElement('button');
+  add.type = 'button';
+  add.className = 'cbe-button';
+  add.textContent = 'Element darunter einfügen';
+  add.addEventListener('click', () => void insertAfter(element.id));
+
   const classic = document.createElement('a');
   classic.className = 'cbe-link';
   classic.href = element.classicUrl;
   classic.textContent = 'Im klassischen Backend bearbeiten';
-  inspector.append(classic);
+  inspector.append(add, classic);
 }
 
 window.addEventListener('message', (event) => {
@@ -878,6 +964,9 @@ window.addEventListener('message', (event) => {
         });
       break;
     }
+    case 'cbe:insert':
+      void insertAfter(message.id);
+      break;
     case 'cbe:commit':
       if (message.render) {
         awaitingRender.add(message.id);

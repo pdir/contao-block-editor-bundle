@@ -767,6 +767,65 @@ body {
   justify-content: flex-end;
 }
 
+/* The types for a new element */
+.cbe-inserter {
+  height: fit-content;
+  max-height: min(640px, calc(100vh - 32px));
+  width: min(480px, calc(100vw - 32px));
+}
+
+.cbe-inserter .cbe-field {
+  margin: 0;
+}
+
+.cbe-inserter__list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 0 -16px;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 16px;
+}
+
+.cbe-inserter__list h3 {
+  color: var(--cbe-muted);
+  font-size: 11px;
+  font-weight: 600;
+  margin: 0 0 4px;
+}
+
+.cbe-inserter__list div {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+}
+
+.cbe-inserter__list button {
+  background: none;
+  border: 0;
+  border-radius: calc(8px * var(--cbe-round, 1));
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.cbe-inserter__list button:hover,
+.cbe-inserter__list button:focus-visible {
+  background: var(--cbe-fill);
+}
+
+.cbe-inserter__message {
+  color: var(--cbe-muted);
+  margin: 0;
+}
+
+.cbe-inserter__message:empty {
+  display: none;
+}
+
 .cbe-button {
   background: var(--cbe-fill);
   border: 0;
