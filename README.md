@@ -21,7 +21,8 @@ Verschieben von Elementen, auch zwischen Artikeln und Spalten: per Griff links n
 hoch/runter, wenn das Element den Fokus hat. Ziel ist immer ein bearbeitbares Element, leere Artikel sind noch kein
 Ablageziel. Links außerhalb der bearbeitbaren Elemente führen im Editor zur nächsten Seite, vorher wird alles gespeichert;
 externe Links und Dateien öffnen einen neuen Tab. Links im Inhalt zeigen beim Klick eine Leiste mit Öffnen und Bearbeiten;
-im Text lassen sie sich dort ändern oder entfernen und mit Strg/Cmd + K neu anlegen. Der Editor öffnet sich im Backend über die Operation „Im Block-Editor öffnen“ im Seitenbaum.
+im Text lassen sie sich dort ändern oder entfernen und mit Strg/Cmd + K neu anlegen. Liegt ein Element in einem
+anderen, etwa in einer Gruppe oder einem Modul, wählt der erste Button der Leiste über dem Text das übergeordnete Element aus. Der Editor öffnet sich im Backend über die Operation „Im Block-Editor öffnen“ im Seitenbaum.
 Unter „Mehr erfahren“ im Inspector lässt sich „Navigationslinks bearbeiten“ einschalten: Ein Klick auf einen Menüpunkt
 ändert dann den Seitennamen direkt im Menü, und der Inspector zeigt die weiteren Angaben der Seite. Es gelten die Rechte
 für Seiten aus dem Backend, gespeichert wird mit Versionierung wie bei den Elementen.

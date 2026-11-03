@@ -1,4 +1,5 @@
 import type { Editor } from '@tiptap/core';
+import { ICONS, iconElement } from './editor-icons';
 import { LinkBar } from './link-bar';
 import { NavLinks } from './nav-links';
 import { RecordFields } from './record-fields';
@@ -362,6 +363,7 @@ function endSession(): void {
   linkBar.hide();
   nav?.end();
   record?.end();
+  formatBar.hidden = true;
 
   if (!session) {
     return;
@@ -395,6 +397,10 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
 
   if (inline) {
     caretPlaced = inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
+  }
+
+  if (session) {
+    addParentButton(root);
   }
 
   toShell({ type: 'cbe:select', id });
@@ -575,8 +581,47 @@ formatBar.className = 'cbe-link-bar cbe-format-bar';
 formatBar.hidden = true;
 let updateFormatBar: (() => void) | null = null;
 
+/**
+ * Nested elements, e.g. in a group or a module, cover their parent: it can only be reached
+ * from here. Before the formats, or alone in the bar for a plain text.
+ */
+function addParentButton(root: HTMLElement): void {
+  const parent = closestId(root.parentElement);
+
+  if (!parent) {
+    return;
+  }
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.title = 'Übergeordnetes Element auswählen';
+  button.setAttribute('aria-label', button.title);
+  button.append(iconElement(document, ICONS.parent));
+  // The text keeps its selection until the click selects the parent
+  button.addEventListener('pointerdown', (event) => event.preventDefault());
+  button.addEventListener('click', () => {
+    endSession();
+    parent.root.focus({ preventScroll: true });
+    showHandleOn(parent.root);
+    toShell({ type: 'cbe:select', id: parent.id });
+  });
+
+  if (formatBar.hidden) {
+    formatBar.setAttribute('role', 'toolbar');
+    formatBar.setAttribute('aria-label', 'Element');
+    formatBar.replaceChildren(button);
+    formatBar.hidden = false;
+  } else {
+    const divider = document.createElement('span');
+    divider.className = 'cbe-format-bar__divider';
+    formatBar.prepend(button, divider);
+  }
+
+  placeFormatBar();
+}
+
 function placeFormatBar(): void {
-  const target = session?.editor ? session.target : null;
+  const target = session?.target;
 
   if (!target || formatBar.hidden) {
     return;

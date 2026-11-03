@@ -158,6 +158,14 @@ cto-toolbar,
   height: 20px;
 }
 
+/* Between the parent and the formats of the text */
+.cbe-format-bar .cbe-format-bar__divider {
+  align-self: stretch;
+  width: 1px;
+  margin: 3px;
+  background: rgb(118 118 128 / 30%);
+}
+
 .cbe-format-bar [aria-pressed='true'] {
   background: rgb(118 118 128 / 24%);
 }
