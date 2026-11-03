@@ -63,6 +63,17 @@ export class SaveQueue {
     }
   }
 
+  /** A deleted element: nothing is left to save. */
+  forget(id: number): void {
+    const entry = this.entries.get(id);
+
+    if (entry?.timer) {
+      clearTimeout(entry.timer);
+    }
+
+    this.entries.delete(id);
+  }
+
   revision(id: number): string | undefined {
     return this.entries.get(id)?.revision;
   }

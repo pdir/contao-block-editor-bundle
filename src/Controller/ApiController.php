@@ -6,6 +6,7 @@ namespace Pdir\ContaoBlockEditorBundle\Controller;
 
 use Contao\CoreBundle\Exception\AccessDeniedException;
 use Pdir\ContaoBlockEditorBundle\Element\ElementCreator;
+use Pdir\ContaoBlockEditorBundle\Element\ElementDeleter;
 use Pdir\ContaoBlockEditorBundle\Element\ElementInspector;
 use Pdir\ContaoBlockEditorBundle\Element\ElementMover;
 use Pdir\ContaoBlockEditorBundle\Element\ElementUpdater;
@@ -30,6 +31,7 @@ final class ApiController
         private readonly ElementUpdater $updater,
         private readonly ElementMover $mover,
         private readonly ElementCreator $creator,
+        private readonly ElementDeleter $deleter,
         private readonly PageInspector $pages,
         private readonly PageUpdater $pageUpdater,
         private readonly ReaderRecord $records,
@@ -117,6 +119,36 @@ final class ApiController
             }
 
             return $this->json($this->updater->update($id, $data['revision'], $data['values']));
+        });
+    }
+
+    #[Route('/elements/{id}', name: 'pdir_block_editor_api_delete', requirements: ['id' => '[1-9]\d{0,9}'], methods: ['DELETE'])]
+    public function delete(Request $request, int $id): Response
+    {
+        return $this->handle(function () use ($request, $id): Response {
+            $this->guard->assertCanWrite($request);
+
+            $data = $this->guard->decodeJsonBody($request);
+
+            if (!\is_string($data['revision'] ?? null)) {
+                throw new ApiException(400, 'Ungültige Anfrage.');
+            }
+
+            return $this->json($this->deleter->delete($id, $data['revision']));
+        });
+    }
+
+    /**
+     * Restores what was deleted, from Contao's tl_undo.
+     */
+    #[Route('/undo/{id}', name: 'pdir_block_editor_api_undo', requirements: ['id' => '[1-9]\d{0,9}'], methods: ['POST'])]
+    public function undo(Request $request, int $id): Response
+    {
+        return $this->handle(function () use ($request, $id): Response {
+            $this->guard->assertCanWrite($request);
+            $this->deleter->restore($id);
+
+            return $this->json(['restored' => true]);
         });
     }
 

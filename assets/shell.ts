@@ -36,6 +36,7 @@ interface Element {
   id: number;
   type: string;
   editable: boolean;
+  deletable?: boolean;
   revision: string;
   values: Record<string, unknown>;
   classicUrl: string;
@@ -47,8 +48,9 @@ const inspector = document.getElementById('cbe-inspector') as HTMLElement;
 const status = document.getElementById('cbe-status') as HTMLElement;
 const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
+const undoButton = document.getElementById('cbe-undo') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl, undo: undoUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter' | 'undo', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -84,6 +86,10 @@ const typedInPage = new Set<string>();
 const sideEffects = new Set<string>();
 /** The element opened from the back end, shown once the page is ready. */
 let shownFirst: number | null = Number(new URLSearchParams(window.location.search).get('element')) || null;
+/** Shown once the reloaded page is ready, instead of an empty status. */
+let statusAfterLoad: string | null = null;
+/** Restores the last deletion, offered until the status changes. */
+let undoLast: (() => void) | null = null;
 
 /** Keeps the inspector in sync with what is typed in the page. */
 const fieldSync = new Map<string, (value: unknown) => void>();
@@ -128,6 +134,8 @@ function post(message: ToFrame): void {
 
 function setStatus(text: string, isError = false, state?: 'busy' | 'saved'): void {
   status.textContent = text;
+  undoButton.hidden = true;
+  undoLast = null;
   status.classList.toggle('is-error', isError);
 
   if (state || isError) {
@@ -332,6 +340,105 @@ async function insertAfter(target: number): Promise<void> {
   }
 }
 
+/** Deletes an element with the elements nested in it. Contao keeps them for "Wiederherstellen". */
+async function deleteElement(id: number): Promise<void> {
+  const element = elements.get(id);
+  const load = currentLoad;
+
+  if (!element) {
+    return;
+  }
+
+  const label = schema[element.type]?.label ?? element.type;
+
+  post({ type: 'cbe:end' });
+  setStatus('Wird gelöscht …', false, 'busy');
+
+  // Like a move, it waits for what is still being saved
+  let done = (): void => {};
+  const previous = moving;
+  moving = new Promise((resolve) => { done = resolve; });
+
+  try {
+    await previous;
+    await queue.settle();
+
+    const response = await fetch(`${api}/${id}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Block-Editor-Token': token },
+      body: JSON.stringify({ revision: queue.revision(id) ?? element.revision }),
+    });
+
+    const data = (await response.json().catch(() => ({}))) as { error?: string; deleted?: number[]; undo?: number | null };
+
+    if (!response.ok) {
+      throw new Error(data.error ?? 'Löschen fehlgeschlagen.');
+    }
+
+    for (const gone of data.deleted ?? [id]) {
+      elements.delete(gone);
+      queue.forget(gone);
+      insertedAfter.delete(gone);
+      awaitingRender.delete(gone);
+    }
+
+    if (load === currentLoad) {
+      post({ type: 'cbe:remove', id });
+    }
+
+    if (selected !== null && !elements.has(selected)) {
+      selected = null;
+      renderInspector();
+    }
+
+    setStatus(`Gelöscht: ${label}`, false, 'saved');
+
+    if (data.undo) {
+      const undo = data.undo;
+
+      undoButton.hidden = false;
+      undoLast = () => void restoreElement(undo, id, label);
+    }
+  } catch (error) {
+    setStatus(error instanceof Error && !(error instanceof TypeError) ? error.message : 'Löschen fehlgeschlagen. Bitte die Verbindung prüfen.', true);
+  } finally {
+    done();
+  }
+}
+
+/** Puts a deleted element back and shows it in the reloaded page. */
+async function restoreElement(undo: number, id: number, label: string): Promise<void> {
+  setStatus('Wird wiederhergestellt …', false, 'busy');
+
+  try {
+    const response = await fetch(`${undoUrl}/${undo}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Block-Editor-Token': token },
+      body: '{}',
+    });
+
+    if (!response.ok) {
+      const data = (await response.json().catch(() => ({}))) as { error?: string };
+
+      throw new Error(data.error ?? 'Wiederherstellen fehlgeschlagen.');
+    }
+  } catch (error) {
+    setStatus(error instanceof Error && !(error instanceof TypeError) ? error.message : 'Wiederherstellen fehlgeschlagen. Bitte die Verbindung prüfen.', true);
+
+    return;
+  }
+
+  // Its place and its wrappers come from the server: the page is loaded again
+  const href = frameHref();
+
+  shownFirst = id;
+  statusAfterLoad = `Wiederhergestellt: ${label}`;
+
+  if (href) {
+    await goTo(href, false);
+  }
+}
+
 /** Forgets the previous page. The queue stays: its entries are replaced when tracked again. */
 function resetPage(): void {
   elements.clear();
@@ -518,7 +625,14 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
 
   shownFirst = null;
   rememberPage(page);
-  setStatus(frameElements.length ? '' : 'Nur Ansicht: Auf dieser Seite gibt es nichts, das du bearbeiten darfst.');
+
+  if (frameElements.length && statusAfterLoad) {
+    setStatus(statusAfterLoad, false, 'saved');
+  } else {
+    setStatus(frameElements.length ? '' : 'Nur Ansicht: Auf dieser Seite gibt es nichts, das du bearbeiten darfst.');
+  }
+
+  statusAfterLoad = null;
 }
 
 function createField(element: Element, field: FieldSchema): HTMLElement {
@@ -850,17 +964,31 @@ function renderInspector(): void {
   }
 
   // Also the keyboard's way to a new element
+  const actions = document.createElement('div');
+  actions.className = 'cbe-element-actions';
+
   const add = document.createElement('button');
   add.type = 'button';
   add.className = 'cbe-button';
   add.textContent = 'Element darunter einfügen';
   add.addEventListener('click', () => void insertAfter(element.id));
+  actions.append(add);
+
+  // Without asking: it can be undone right away and later in "Wiederherstellen"
+  if (element.deletable) {
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'cbe-button cbe-button--danger';
+    remove.textContent = 'Löschen';
+    remove.addEventListener('click', () => void deleteElement(element.id));
+    actions.append(remove);
+  }
 
   const classic = document.createElement('a');
   classic.className = 'cbe-link';
   classic.href = element.classicUrl;
   classic.textContent = 'Im klassischen Backend bearbeiten';
-  inspector.append(add, classic);
+  inspector.append(actions, classic);
 }
 
 window.addEventListener('message', (event) => {
@@ -1270,6 +1398,8 @@ previewToggle?.addEventListener('click', () => {
     })(true))
     .catch((error: unknown) => console.error('[block-editor] Das Vorschau-Menü fehlt:', error));
 }, { once: true });
+
+undoButton.addEventListener('click', () => undoLast?.());
 
 window.history.replaceState({ frame: frame.src }, '');
 

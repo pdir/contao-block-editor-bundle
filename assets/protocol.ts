@@ -57,6 +57,8 @@ export type ToFrame =
    * means it is brought into view and its text is opened.
    */
   | { type: 'cbe:refresh'; id: number; after?: number; show?: boolean }
+  /** Deleted, with the elements nested in it. */
+  | { type: 'cbe:remove'; id: number }
   /** Brings an element into view, for example the one opened from the back end. */
   | { type: 'cbe:show'; id: number }
   /** Null if the picker was closed without a choice. */

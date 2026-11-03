@@ -33,6 +33,8 @@ gespeichert.
 Neue Elemente kommen über das Plus unter dem Griff oder den Button „Element darunter einfügen“ im Inspector unter das
 gewählte Element. Zur Wahl stehen die Elementtypen, die der Benutzer an dieser Stelle anlegen darf, auch in verschachtelten
 Elementen; das neue Element erhält die Standardwerte aus dem DCA und öffnet sich gleich zum Schreiben.
+„Löschen“ im Inspector entfernt das gewählte Element samt verschachtelter Elemente, wenn der Benutzer es löschen darf.
+Wie im Backend landet es in „Wiederherstellen“; direkt danach holt „Rückgängig“ in der Kopfzeile es zurück.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu
 bewegen: Dann führt jeder Link zu seiner Seite. Jeder neue Editor startet mit eingeschaltetem Bearbeiten.
 Die Tastaturbefehle erklärt der Inspector unter „Globale Tastaturbefehle“ (Taste `?`). Einzelne Tasten wirken nur,
@@ -40,7 +42,7 @@ wenn gerade kein Text bearbeitet wird, und lassen sich für Screenreader abschal
 Strg/⌘ + Umschalt + Komma für den Inspector. Kombinationen der Browser und Tasten, die Zeichen erzeugen (⌥ auf dem Mac,
 AltGr unter Windows), bleiben unberührt.
 
-Noch offen: Kopieren/Löschen, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
+Noch offen: Kopieren, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
 Responsive-Vorschau und die Erweiterungs-API. Felder, die der Editor noch nicht unterstützt, bleiben über den Link
 „Im klassischen Backend bearbeiten“ erreichbar.
 

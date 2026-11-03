@@ -8,6 +8,7 @@ use Contao\Controller;
 use Contao\CoreBundle\Framework\ContaoFramework;
 use Contao\CoreBundle\Security\ContaoCorePermissions;
 use Contao\CoreBundle\Security\DataContainer\ReadAction;
+use Contao\CoreBundle\Security\DataContainer\DeleteAction;
 use Contao\CoreBundle\Security\DataContainer\UpdateAction;
 use Contao\StringUtil;
 use Contao\System;
@@ -102,6 +103,7 @@ final class ElementInspector
                 'id' => $id,
                 'type' => (string) $row['type'],
                 'editable' => $editable,
+                'deletable' => !($GLOBALS['TL_DCA'][self::TABLE]['config']['notDeletable'] ?? false) && $this->security->isGranted(ContaoCorePermissions::DC_PREFIX.self::TABLE, new DeleteAction(self::TABLE, $row)),
                 'revision' => self::revision($row),
                 'values' => (object) $values,
                 'classicUrl' => $this->classicUrl($row),

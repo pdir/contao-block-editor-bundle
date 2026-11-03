@@ -870,6 +870,44 @@ body {
   margin-bottom: 12px;
 }
 
+/* Below the fields of an element: what can be done with it as a whole */
+.cbe-element-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.cbe-button--danger {
+  color: var(--cbe-error);
+}
+
+.cbe-button--danger:hover {
+  background: var(--cbe-error);
+  color: var(--cbe-on-accent);
+}
+
+.cbe-status-line {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cbe-undo {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0;
+}
+
+.cbe-undo[hidden] {
+  display: none;
+}
+
 /* Title and description of the page, when no element is selected */
 .cbe-page-meta {
   display: flex;

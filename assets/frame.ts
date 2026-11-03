@@ -1116,6 +1116,27 @@ function showNew(id: number, root: HTMLElement): void {
   activate(id, root, null);
 }
 
+/**
+ * A deleted element leaves the page, with the wrappers that only held it, such as a section of
+ * an accordion. The shell ended the session before.
+ */
+function removeElement(id: number): void {
+  let node: HTMLElement | null = findElement(id);
+
+  for (let depth = 0; node; ++depth) {
+    const parent: HTMLElement | null = node.parentElement;
+
+    if (node.classList.contains('handorgel__content')) {
+      node.previousElementSibling?.remove();
+    }
+
+    node.remove();
+    node = depth < 3 && parent && (!parent.id || parent.matches('.handorgel__content')) && !parent.childElementCount && !parent.textContent?.trim() && !parent.hasAttribute(ID_ATTRIBUTE) ? parent : null;
+  }
+
+  placeHandle();
+}
+
 async function refresh(id: number, after?: number, show = false): Promise<void> {
   if (session?.element.id === id) {
     return;
@@ -1240,6 +1261,9 @@ window.addEventListener('message', (event) => {
       }
 
       picked = null;
+      break;
+    case 'cbe:remove':
+      removeElement(message.id);
       break;
     case 'cbe:show': {
       const root = findElement(message.id);

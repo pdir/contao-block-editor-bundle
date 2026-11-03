@@ -34,13 +34,17 @@
              data-nav-pages="{{ assets.nav_pages_js }}"
              data-records="{{ path('pdir_block_editor_api_pages')|replace({'/pages': '/records'}) }}"
              data-reader-record="{{ assets.reader_record_js }}"
-             data-inserter="{{ assets.inserter_js }}">
+             data-inserter="{{ assets.inserter_js }}"
+             data-undo="{{ path('pdir_block_editor_api_pages')|replace({'/pages': '/undo'}) }}">
             <header class="cbe-bar">
                 <button id="cbe-back" class="cbe-link cbe-back" type="button" hidden>Zurück</button>
                 <div class="cbe-doc">
                     <img class="cbe-logo" src="{{ app.request.basePath }}/bundles/contaoblockeditor/icon.svg" width="16" height="16" alt="">
                     <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
-                    <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
+                    <div class="cbe-status-line">
+                        <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
+                        <button id="cbe-undo" class="cbe-link cbe-undo" type="button" hidden>Rückgängig</button>
+                    </div>
                 </div>
                 <button id="cbe-edit-toggle" class="cbe-icon-button" type="button" aria-pressed="true" aria-label="Bearbeiten" title="Bearbeiten ein- oder ausschalten (E)">
                     <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5 13.5 5.5 5.5 13.5H2.5V10.5Z"/><path d="m8.5 4.5 3 3"/></svg>
