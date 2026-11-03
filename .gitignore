@@ -5,5 +5,8 @@
 /.phpunit.cache
 /.idea/
 .DS_Store
+
+# dev
+/docs/
 projektbeschreibung.md
 test_user.md
