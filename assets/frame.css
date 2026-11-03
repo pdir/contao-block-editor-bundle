@@ -280,8 +280,8 @@ cto-toolbar,
   }
 }
 
-/* A cell of a table being typed in */
-.cbe-editable :is(td, th)[contenteditable] {
+/* A cell of a table or an item of a list being typed in */
+.cbe-editable :is(td, th, li)[contenteditable] {
   outline: 2px solid #f47c00;
   outline-offset: -2px;
 }

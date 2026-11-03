@@ -32,6 +32,29 @@ final class RecordWriterTest extends TestCase
         yield 'too many rows' => [array_fill(0, 501, ['a']), false];
     }
 
+    #[DataProvider('lists')]
+    public function testAcceptsOnlyItemsAsStrings(mixed $value, bool $expected): void
+    {
+        $this->assertSame($expected, RecordWriter::isList($value));
+    }
+
+    public static function lists(): iterable
+    {
+        yield 'items' => [['a', '<b>b</b>', ''], true];
+        yield 'empty' => [[], false];
+        yield 'not a list' => [['x' => 'a'], false];
+        yield 'nested item' => [[['a']], false];
+        yield 'number item' => [[1], false];
+        yield 'string' => ['a', false];
+        yield 'too many items' => [array_fill(0, 501, 'a'), false];
+    }
+
+    public function testListItemsAreEditedInThePage(): void
+    {
+        $this->assertSame([['field' => 'listitems', 'selector' => 'ul, ol', 'mode' => 'list']], ElementInspector::inlineFields('list', ['listitems', 'listtype']));
+        $this->assertSame([], ElementInspector::inlineFields('list', ['listtype']));
+    }
+
     public function testTableCellsAreEditedInThePage(): void
     {
         $this->assertSame([['field' => 'tableitems', 'selector' => 'table', 'mode' => 'table']], ElementInspector::inlineFields('table', ['tableitems', 'summary']));

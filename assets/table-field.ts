@@ -1,5 +1,5 @@
-// The cells of a table in the inspector: the keyboard's way to them, and the only one for cells
-// with markup. Loaded with the first table.
+// The cells of a table or the items of a list in the inspector: the keyboard's way to them, and
+// the only one for those with markup. Loaded with the first table or list.
 import { cellText, insertColumn, insertRow, removeColumn, removeRow, setCell, toRows, type Rows } from './table-data';
 
 export interface TableField {
@@ -14,15 +14,17 @@ export interface TableFieldOptions {
   /** First and last row are the header and the footer of the table. */
   header: boolean;
   footer: boolean;
-  change(rows: Rows): void;
+  /** One item per row, saved as a list of strings. */
+  list?: boolean;
+  change(value: Rows | string[]): void;
 }
 
-export function createTableField({ label, value, header, footer, change }: TableFieldOptions): TableField {
+export function createTableField({ label, value, header, footer, list = false, change }: TableFieldOptions): TableField {
   let rows = toRows(value);
   let focused: [number, number] = [0, 0];
 
   const root = document.createElement('div');
-  root.className = 'cbe-table-field';
+  root.className = list ? 'cbe-table-field cbe-table-field--list' : 'cbe-table-field';
 
   const scroller = document.createElement('div');
   scroller.className = 'cbe-table-field__scroll';
@@ -36,7 +38,7 @@ export function createTableField({ label, value, header, footer, change }: Table
 
   const update = (next: Rows): void => {
     rows = next;
-    change(rows);
+    change(list ? rows.map(([item]) => item ?? '') : rows);
   };
 
   const render = (): void => {
@@ -57,7 +59,7 @@ export function createTableField({ label, value, header, footer, change }: Table
         // As in the back end: entities are shown as their characters, tags as they are
         input.value = cellText(cell);
         input.dataset.cell = `${r}:${c}`;
-        input.setAttribute('aria-label', `${label}: Zeile ${r + 1}, Spalte ${c + 1}`);
+        input.setAttribute('aria-label', list ? `${label}: Eintrag ${r + 1}` : `${label}: Zeile ${r + 1}, Spalte ${c + 1}`);
         input.addEventListener('focus', () => { focused = [r, c]; });
         input.addEventListener('input', () => update(setCell(rows, r, c, input.value)));
         td.append(input);
@@ -89,12 +91,17 @@ export function createTableField({ label, value, header, footer, change }: Table
     return element;
   };
 
+  const row = list ? 'Eintrag' : 'Zeile';
+
   actions.append(
-    button('Zeile darunter', () => structure(insertRow(rows, focused[0] + 1), [focused[0] + 1, focused[1]])),
-    button('Spalte rechts', () => structure(insertColumn(rows, focused[1] + 1), [focused[0], focused[1] + 1])),
-    button('Zeile löschen', () => rows.length > 1 && structure(removeRow(rows, focused[0]), focused)),
-    button('Spalte löschen', () => (rows[0]?.length ?? 0) > 1 && structure(removeColumn(rows, focused[1]), focused)),
+    button(`${row} darunter`, () => structure(insertRow(rows, focused[0] + 1), [focused[0] + 1, focused[1]])),
+    button(`${row} löschen`, () => rows.length > 1 && structure(removeRow(rows, focused[0]), focused)),
   );
+
+  if (!list) {
+    actions.insertBefore(button('Spalte rechts', () => structure(insertColumn(rows, focused[1] + 1), [focused[0], focused[1] + 1])), actions.lastChild);
+    actions.append(button('Spalte löschen', () => (rows[0]?.length ?? 0) > 1 && structure(removeColumn(rows, focused[1]), focused)));
+  }
 
   root.append(scroller, actions);
   render();

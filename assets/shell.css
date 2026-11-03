@@ -1065,6 +1065,19 @@ body {
   resize: none;
 }
 
+/* A list: one item per row, as wide as the inspector */
+.cbe-table-field--list .cbe-table-field__grid {
+  width: 100%;
+}
+
+.cbe-table-field--list .cbe-table-field__grid td {
+  padding: 0;
+}
+
+.cbe-field .cbe-table-field--list textarea {
+  width: 100%;
+}
+
 .cbe-table-field__grid :is(.is-header, .is-footer) textarea {
   font-weight: 600;
 }

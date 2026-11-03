@@ -13,7 +13,7 @@ interface FieldSchema {
   name: string;
   label: string;
   description: string;
-  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard';
+  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard';
   rich: boolean;
   multiple: boolean;
   mandatory: boolean;
@@ -667,7 +667,8 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       control = field.rich ? richControl(element, field, textarea, change) : textarea;
       break;
     }
-    case 'tableWizard': {
+    case 'tableWizard':
+    case 'listWizard': {
       const holder = document.createElement('div');
       const flag = (name: string): boolean => Boolean(element.values[name]) && element.values[name] !== '0';
 
@@ -680,11 +681,12 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
           return;
         }
 
-        const table = createTableField({ label: field.label, value: element.values[field.name], header: flag('thead'), footer: flag('tfoot'), change });
+        const list = field.input === 'listWizard';
+        const table = createTableField({ label: field.label, value: element.values[field.name], header: !list && flag('thead'), footer: !list && flag('tfoot'), list, change });
 
         holder.append(table.root);
         fieldSync.set(field.name, (next) => table.sync(next));
-      }).catch((error: unknown) => console.error('[block-editor] Die Tabelle fehlt:', error));
+      }).catch((error: unknown) => console.error('[block-editor] Das Feld fehlt:', error));
       control = holder;
       break;
     }
@@ -804,7 +806,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
   wrapper.append(label, control);
 
   // The table wizard's description is about its form in the back end
-  if (field.description && field.input !== 'tableWizard') {
+  if (field.description && field.input !== 'tableWizard' && field.input !== 'listWizard') {
     const description = document.createElement('p');
     description.className = 'cbe-description';
     description.textContent = field.description;

@@ -138,6 +138,13 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
     return table;
   }
 
+  const list = element.inline.find(({ mode }) => mode === 'list');
+  const item = hit instanceof Element ? hit.closest('li') : null;
+
+  if (list && item && item.parentElement === root.querySelector(list.selector ?? 'ul, ol')) {
+    return list;
+  }
+
   const plains = element.inline.filter(({ mode }) => mode === 'plain');
   const riches = element.inline.filter(({ mode }) => mode === 'rich');
   const plain = plains.find(({ section }) => !section);
@@ -159,7 +166,7 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
     return riches[0];
   }
 
-  return !hit && plainTarget ? (plain as InlineConfig) : !hit && table ? table : null;
+  return hit ? null : plainTarget ? (plain as InlineConfig) : table ?? list ?? null;
 }
 
 function toShell(message: ToShell): void {
@@ -394,6 +401,14 @@ function dataRow(table: HTMLTableElement, row: HTMLTableRowElement, rows: Rows):
   return head + (matched[at - head] ?? at - head);
 }
 
+/** The clicked item, or the first one for the keyboard. */
+function startList(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
+  const list = root.querySelector<HTMLElement>(inline.selector ?? 'ul, ol');
+  const hit = event?.target instanceof Element ? event.target.closest<HTMLElement>('li') : list?.querySelector<HTMLElement>(':scope > li');
+
+  return Boolean(list && hit && hit.parentElement === list && startItem(element, inline, list, hit, event));
+}
+
 /** The clicked cell, or the first one of the body for the keyboard. */
 function startTable(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
   const table = root.querySelector<HTMLTableElement>(inline.selector ?? 'table');
@@ -402,80 +417,57 @@ function startTable(element: FrameElement, inline: InlineConfig, root: HTMLEleme
   return Boolean(table && hit && hit.closest('table') === table && startCell(element, inline, table, hit, event));
 }
 
-/** A cell of a table: typed in place, Tab moves on, the bar adds and removes rows and columns. */
-function startCell(element: FrameElement, inline: InlineConfig, table: HTMLTableElement, cell: HTMLTableCellElement, event: PointerEvent | null): boolean {
-  const { field } = inline;
-  const rows = toRows(element.values[field]);
-  const row = cell.parentElement as HTMLTableRowElement;
-  const r = dataRow(table, row, rows);
-  const c = cell.cellIndex;
-  const html = rows[r]?.[c];
+type Tool = [icon: keyof typeof ICONS, title: string, enabled: boolean, run: () => HTMLElement | undefined];
 
-  // Markup in a cell can only be kept in the inspector
-  if (html === undefined || !isPlainCell(html)) {
+/**
+ * A cell of a table or an item of a list: text without markup, typed in place. The bar above
+ * changes the structure, the data first and then the same in the page.
+ */
+function startPart(element: FrameElement, inline: InlineConfig, target: HTMLElement, html: string, event: PointerEvent | null, select: boolean, options: {
+  label: string;
+  anchor: HTMLElement;
+  input(html: string): void;
+  keydown(event: KeyboardEvent): void;
+  tools: Tool[];
+  restart(next: HTMLElement): void;
+}): boolean {
+  // Markup can only be kept in the inspector
+  if (!isPlainCell(html)) {
     return false;
   }
 
-  const state = snapshot(element, inline, cell);
+  const state = snapshot(element, inline, target);
 
-  cell.innerText = cellText(html);
+  target.innerText = cellText(html);
 
   try {
-    cell.contentEditable = 'plaintext-only';
+    target.contentEditable = 'plaintext-only';
   } catch {
-    cell.contentEditable = 'true';
+    target.contentEditable = 'true';
   }
 
-  cell.focus();
+  target.focus();
 
   if (event) {
     placeCaret(event.clientX, event.clientY);
   } else {
-    // Reached with Tab, as in a spreadsheet: typing replaces the content
-    getSelection()?.selectAllChildren(cell);
+    // Reached with the keyboard, as in a spreadsheet: typing replaces the content
+    const selection = getSelection();
+    selection?.selectAllChildren(target);
+
+    if (!select) {
+      selection?.collapseToEnd();
+    }
   }
 
-  const save = (next: Rows): void => {
-    element.values[field] = next;
-    toShell({ type: 'cbe:change', id: element.id, field, value: next });
-  };
+  const onInput = (): void => options.input(cellHtml(target.innerText.replace(/\n$/, '')));
 
-  const onInput = (): void => save(setCell(toRows(element.values[field]), r, c, cellHtml(cell.innerText.replace(/\n$/, ''))));
+  target.addEventListener('input', onInput);
+  target.addEventListener('keydown', options.keydown);
 
-  const cells = (): HTMLTableCellElement[] => Array.from(table.rows).flatMap((tr) => Array.from(tr.cells));
-
-  const moveTo = (next: HTMLTableCellElement | undefined): void => {
-    endSession();
-
-    if (next) {
-      startCell(element, inline, table, next, null);
-    }
-  };
-
-  let addRow = (): HTMLTableRowElement => row;
-
-  const onKeydown = (event: KeyboardEvent): void => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      endSession();
-    } else if (event.key === 'Tab') {
-      const all = cells();
-      const next = all[all.indexOf(cell) + (event.shiftKey ? -1 : 1)];
-
-      // As in a word processor: Tab in the last cell adds a row
-      if (next || !event.shiftKey) {
-        event.preventDefault();
-        moveTo(next ?? addRow().cells[0]);
-      }
-    }
-  };
-
-  cell.addEventListener('input', onInput);
-  cell.addEventListener('keydown', onKeydown);
-
-  const inBody = row.parentElement !== table.tHead && row.parentElement !== table.tFoot;
-  const bodyRows = table.tBodies[0]?.rows.length ?? 0;
-  const tool = (icon: keyof typeof ICONS, title: string, enabled: boolean, run: () => HTMLTableCellElement | undefined): HTMLButtonElement => {
+  formatBar.setAttribute('role', 'toolbar');
+  formatBar.setAttribute('aria-label', options.label);
+  formatBar.replaceChildren(...options.tools.map(([icon, title, enabled, run]) => {
     const button = document.createElement('button');
     button.type = 'button';
     button.title = title;
@@ -484,13 +476,57 @@ function startCell(element: FrameElement, inline: InlineConfig, table: HTMLTable
     button.append(iconElement(document, ICONS[icon]));
     button.addEventListener('pointerdown', (down) => down.preventDefault());
     button.addEventListener('click', () => {
-      // The structure changes: the data first, then the same in the page
-      const target = run();
-      moveTo(target);
+      const next = run();
+      endSession();
+
+      if (next) {
+        options.restart(next);
+      }
     });
 
     return button;
+  }));
+  formatBar.hidden = false;
+
+  session = {
+    ...state,
+    cleanup() {
+      target.removeEventListener('input', onInput);
+      target.removeEventListener('keydown', options.keydown);
+      target.removeAttribute('contenteditable');
+    },
+    // The text is in place already, as it was typed
+    showValue() {},
+    // Above the part, the bar would cover the one before
+    barAnchor: options.anchor,
   };
+
+  placeFormatBar();
+
+  return true;
+}
+
+/** Sends the new value of a table or a list. */
+function saveParts(element: FrameElement, field: string, next: unknown): void {
+  element.values[field] = next;
+  toShell({ type: 'cbe:change', id: element.id, field, value: next });
+}
+
+/** A cell of a table: Tab moves on, also into a new row. */
+function startCell(element: FrameElement, inline: InlineConfig, table: HTMLTableElement, cell: HTMLTableCellElement, event: PointerEvent | null): boolean {
+  const { field } = inline;
+  const rows = (): Rows => toRows(element.values[field]);
+  const save = (next: Rows): void => saveParts(element, field, next);
+  const row = cell.parentElement as HTMLTableRowElement;
+  const r = dataRow(table, row, rows());
+  const c = cell.cellIndex;
+  const html = rows()[r]?.[c];
+  const inBody = row.parentElement !== table.tHead && row.parentElement !== table.tFoot;
+  const restart = (next: HTMLElement): void => void startCell(element, inline, table, next as HTMLTableCellElement, null);
+
+  if (html === undefined) {
+    return false;
+  }
 
   const blank = (tag: string): HTMLTableCellElement => {
     const created = document.createElement(tag) as HTMLTableCellElement;
@@ -503,13 +539,13 @@ function startCell(element: FrameElement, inline: InlineConfig, table: HTMLTable
   };
 
   /** Below this row: the header gets the first row of the body, the footer the last one. */
-  addRow = (): HTMLTableRowElement => {
+  const addRow = (): HTMLTableRowElement => {
     const at = row.parentElement === table.tHead ? 1 : row.parentElement === table.tFoot ? r : r + 1;
     const tr = document.createElement('tr');
     const first = table.tBodies[0]?.rows[0]?.cells[0];
 
     tr.append(...Array.from(row.cells, (_, index) => blank(index === 0 && first?.tagName === 'TH' ? 'th' : 'td')));
-    save(insertRow(toRows(element.values[field]), at));
+    save(insertRow(rows(), at));
 
     if (inBody) {
       row.after(tr);
@@ -522,55 +558,114 @@ function startCell(element: FrameElement, inline: InlineConfig, table: HTMLTable
     return tr;
   };
 
-  formatBar.setAttribute('role', 'toolbar');
-  formatBar.setAttribute('aria-label', 'Tabelle');
-  formatBar.replaceChildren(
-    tool('rowAfter', 'Zeile darunter einfügen', true, () => addRow().cells[c]),
-    tool('columnAfter', 'Spalte rechts einfügen', true, () => {
-      save(insertColumn(toRows(element.values[field]), c + 1));
+  return startPart(element, inline, cell, html, event, true, {
+    label: 'Tabelle',
+    anchor: table,
+    input: (typed) => save(setCell(rows(), r, c, typed)),
+    keydown(key) {
+      if (key.key === 'Enter' && !key.shiftKey) {
+        key.preventDefault();
+        endSession();
+      } else if (key.key === 'Tab') {
+        const all = Array.from(table.rows).flatMap((tr) => Array.from(tr.cells));
+        const next = all[all.indexOf(cell) + (key.shiftKey ? -1 : 1)];
 
-      for (const tr of Array.from(table.rows)) {
-        tr.cells[c]?.after(blank(tr.parentElement === table.tHead ? 'th' : 'td'));
+        // As in a word processor: Tab in the last cell adds a row
+        if (next || !key.shiftKey) {
+          key.preventDefault();
+          const target = next ?? addRow().cells[0];
+          endSession();
+          restart(target);
+        }
       }
-
-      return row.cells[c + 1];
-    }),
-    tool('rowDelete', 'Zeile löschen', inBody && bodyRows > 1, () => {
-      const next = (row.nextElementSibling ?? row.previousElementSibling) as HTMLTableRowElement | null;
-
-      save(removeRow(toRows(element.values[field]), r));
-      row.remove();
-
-      return next?.cells[c];
-    }),
-    tool('columnDelete', 'Spalte löschen', row.cells.length > 1, () => {
-      save(removeColumn(toRows(element.values[field]), c));
-
-      for (const tr of Array.from(table.rows)) {
-        tr.cells[c]?.remove();
-      }
-
-      return row.cells[Math.min(c, row.cells.length - 1)];
-    }),
-  );
-  formatBar.hidden = false;
-
-  session = {
-    ...state,
-    cleanup() {
-      cell.removeEventListener('input', onInput);
-      cell.removeEventListener('keydown', onKeydown);
-      cell.removeAttribute('contenteditable');
     },
-    // The text is in place already, as it was typed
-    showValue() {},
-    // Above the cell, it would cover the row above
-    barAnchor: table,
+    restart,
+    tools: [
+      ['rowAfter', 'Zeile darunter einfügen', true, () => addRow().cells[c]],
+      ['columnAfter', 'Spalte rechts einfügen', true, () => {
+        save(insertColumn(rows(), c + 1));
+
+        for (const tr of Array.from(table.rows)) {
+          tr.cells[c]?.after(blank(tr.parentElement === table.tHead ? 'th' : 'td'));
+        }
+
+        return row.cells[c + 1];
+      }],
+      ['rowDelete', 'Zeile löschen', inBody && (table.tBodies[0]?.rows.length ?? 0) > 1, () => {
+        const next = (row.nextElementSibling ?? row.previousElementSibling) as HTMLTableRowElement | null;
+
+        save(removeRow(rows(), r));
+        row.remove();
+
+        return next?.cells[c];
+      }],
+      ['columnDelete', 'Spalte löschen', row.cells.length > 1, () => {
+        save(removeColumn(rows(), c));
+
+        for (const tr of Array.from(table.rows)) {
+          tr.cells[c]?.remove();
+        }
+
+        return row.cells[Math.min(c, row.cells.length - 1)];
+      }],
+    ],
+  });
+}
+
+/** An item of a list: Enter adds the next one, Backspace removes an empty one. */
+function startItem(element: FrameElement, inline: InlineConfig, list: HTMLElement, item: HTMLElement, event: PointerEvent | null, select = true): boolean {
+  const { field } = inline;
+  const items = (): string[] => toRows(element.values[field]).map(([text]) => text ?? '');
+  const save = (next: string[]): void => saveParts(element, field, next);
+  const all = Array.from(list.children).filter((child) => child.tagName === 'LI');
+  const at = all.indexOf(item);
+  const restart = (next: HTMLElement, selectNext = true): void => void startItem(element, inline, list, next, null, selectNext);
+
+  // A template of its own may show something else than one item per entry
+  if (all.length !== items().length || at < 0) {
+    return false;
+  }
+
+  const add = (): HTMLElement => {
+    const created = document.createElement('li');
+
+    save([...items().slice(0, at + 1), '', ...items().slice(at + 1)]);
+    item.after(created);
+
+    return created;
   };
 
-  placeFormatBar();
+  const remove = (): HTMLElement | undefined => {
+    const next = (item.previousElementSibling ?? item.nextElementSibling) as HTMLElement | null;
 
-  return true;
+    save(items().filter((_, index) => index !== at));
+    item.remove();
+
+    return next ?? undefined;
+  };
+
+  return startPart(element, inline, item, items()[at], event, select, {
+    label: 'Liste',
+    anchor: list,
+    input: (typed) => save(items().map((text, index) => (index === at ? typed : text))),
+    keydown(key) {
+      const empty = !item.innerText.trim();
+      const next = key.key === 'Enter' ? add() : key.key === 'Backspace' && empty && all.length > 1 ? remove() : null;
+
+      if (next) {
+        key.preventDefault();
+        endSession();
+        restart(next, false);
+      } else if (key.key === 'Enter') {
+        key.preventDefault();
+      }
+    },
+    restart,
+    tools: [
+      ['rowAfter', 'Eintrag darunter einfügen', true, add],
+      ['rowDelete', 'Eintrag löschen', all.length > 1, remove],
+    ],
+  });
 }
 
 function endSession(): void {
@@ -610,7 +705,7 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
   let caretPlaced = false;
 
   if (inline) {
-    caretPlaced = inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
+    caretPlaced = inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'list' ? startList(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
   }
 
   if (session) {
@@ -1422,8 +1517,8 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
     endSession();
   }
 
-  // Only the server knows how the cells look: a rejected change is rendered by it again
-  if (inline.mode === 'table') {
+  // Only the server knows how the cells and items look: a rejected change is rendered by it again
+  if (inline.mode === 'table' || inline.mode === 'list') {
     if (force) {
       void refresh(id);
     }

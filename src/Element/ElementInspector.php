@@ -190,6 +190,11 @@ final class ElementInspector
             $inline[] = ['field' => 'tableitems', 'selector' => 'table', 'mode' => 'table'];
         }
 
+        // The items of the core's list, each edited where it is shown
+        if ('list' === $type && \in_array('listitems', $fields, true)) {
+            $inline[] = ['field' => 'listitems', 'selector' => 'ul, ol', 'mode' => 'list'];
+        }
+
         return $inline;
     }
 
@@ -335,6 +340,10 @@ final class ElementInspector
                 static fn (mixed $row): array => array_values(array_map(static fn (mixed $cell): string => \is_scalar($cell) ? (string) $cell : '', \is_array($row) ? $row : [$row])),
                 $value,
             )) : [];
+        }
+
+        if ('listWizard' === ($config['inputType'] ?? null)) {
+            $value = \is_array($value) ? array_values(array_map(static fn (mixed $item): string => \is_scalar($item) ? (string) $item : '', $value)) : [];
         }
 
         return $value;

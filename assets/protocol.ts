@@ -5,8 +5,8 @@ import type { Shortcut } from './shortcuts';
 export interface InlineConfig {
   field: string;
   selector: string | null;
-  /** A table: each cell is edited where it is shown. */
-  mode: 'rich' | 'plain' | 'table';
+  /** A table or a list: each cell or item is edited where it is shown. */
+  mode: 'rich' | 'plain' | 'table' | 'list';
   /** The headline of the accordion section around the element, which is outside of its root. */
   section?: boolean;
   /** Found in the page by its text. A plain value is a string then, not a text with a unit. */

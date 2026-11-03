@@ -21,6 +21,7 @@ final class RecordWriter
 {
     private const MAX_TABLE_ROWS = 500;
     private const MAX_TABLE_COLUMNS = 50;
+    private const MAX_LIST_ITEMS = 500;
 
     public function __construct(private readonly RequestStack $requestStack)
     {
@@ -45,6 +46,10 @@ final class RecordWriter
 
         if ('tableWizard' === $config['inputType'] && !self::isTable($value)) {
             throw new ApiException(400, 'Ungültige Tabelle.');
+        }
+
+        if ('listWizard' === $config['inputType'] && !self::isList($value)) {
+            throw new ApiException(400, 'Ungültige Liste.');
         }
 
         $class = $GLOBALS['BE_FFL'][$config['inputType']] ?? null;
@@ -127,6 +132,24 @@ final class RecordWriter
                 if (!\is_string($cell)) {
                     return false;
                 }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Items of a list, as the list wizard of the back end sends them.
+     */
+    public static function isList(mixed $value): bool
+    {
+        if (!\is_array($value) || !array_is_list($value) || [] === $value || \count($value) > self::MAX_LIST_ITEMS) {
+            return false;
+        }
+
+        foreach ($value as $item) {
+            if (!\is_string($item)) {
+                return false;
             }
         }
 
