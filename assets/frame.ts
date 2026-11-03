@@ -424,6 +424,11 @@ function openLink(href: string): void {
   }
 }
 
+/** Editing switched off in the shell, which marks the page: it is only looked at. */
+function viewing(): boolean {
+  return document.documentElement.hasAttribute('data-cbe-viewing');
+}
+
 function linkIn(target: EventTarget | null): HTMLAnchorElement | HTMLAreaElement | null {
   return target instanceof Element ? target.closest<HTMLAnchorElement | HTMLAreaElement>('a[href], area[href]') : null;
 }
@@ -839,7 +844,7 @@ document.addEventListener('dragend', () => {
 // One delegated listener instead of one per element. pointerdown fires well before
 // click; no network request or rendering happens on this path.
 document.addEventListener('pointerdown', (event) => {
-  if (event.button !== 0) {
+  if (event.button !== 0 || viewing()) {
     return;
   }
 
@@ -941,23 +946,23 @@ const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(scr
 const [recordTable, recordId] = (script?.dataset.cbeRecord ?? '').split('.');
 const frameRecord: FrameRecord | null = recordId ? { table: recordTable, id: Number(recordId), scope: script?.dataset.cbeRecordScope ?? '' } : null;
 
-// The page is a canvas in here: only links outside of editable elements navigate
+// The page is a canvas in here: only links outside of editable elements navigate. Only
+// looked at, every link leads to its page and the page's own buttons work.
 document.addEventListener('click', (event) => {
   const control = event.target instanceof Element ? event.target.closest('a, area, button, [type="submit"]') : null;
+  const link = linkIn(control);
 
-  if (!control) {
+  if (!control || (!link && viewing())) {
     return;
   }
 
   event.preventDefault();
 
-  const link = linkIn(control);
-
   if (!link) {
     return;
   }
 
-  if (!closestId(link) && !nav?.linkAt(link)) {
+  if (viewing() || (!closestId(link) && !nav?.linkAt(link))) {
     openLink(link.href);
   }
 }, true);
@@ -971,6 +976,10 @@ document.addEventListener('keydown', (event) => {
     event.preventDefault();
     toShell({ type: 'cbe:shortcut', name: shortcut });
 
+    return;
+  }
+
+  if (viewing()) {
     return;
   }
 

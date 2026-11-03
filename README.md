@@ -28,6 +28,8 @@ Unter „Mehr erfahren“ im Inspector lässt sich „Navigationslinks bearbeite
 für Seiten aus dem Backend, gespeichert wird mit Versionierung wie bei den Elementen.
 Auf der Detailseite einer Nachricht oder eines Events lassen sich der Titel (bei Nachrichten auch die Unterüberschrift)
 direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends.
+Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu
+bewegen: Dann führt jeder Link zu seiner Seite. Jeder neue Editor startet mit eingeschaltetem Bearbeiten.
 Die Tastaturbefehle erklärt der Inspector unter „Globale Tastaturbefehle“ (Taste `?`). Einzelne Tasten wirken nur,
 wenn gerade kein Text bearbeitet wird, und lassen sich für Screenreader abschalten. Beim Schreiben gilt nur
 Strg/⌘ + Umschalt + Komma für den Inspector. Kombinationen der Browser und Tasten, die Zeichen erzeugen (⌥ auf dem Mac,

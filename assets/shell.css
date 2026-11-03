@@ -810,6 +810,24 @@ body {
   margin-bottom: 12px;
 }
 
+/* Editing switched off: the inspector says how to switch it on again */
+.cbe-viewing {
+  margin-bottom: 16px;
+}
+
+.cbe-viewing .cbe-hint {
+  margin-bottom: 0;
+}
+
+.cbe-viewing .cbe-description {
+  white-space: normal;
+}
+
+:root:not([data-cbe-viewing]) .cbe-viewing,
+:root[data-cbe-viewing] .cbe-inspector > .cbe-hint {
+  display: none;
+}
+
 /* Help */
 .cbe-help {
   color: var(--cbe-muted);
@@ -842,12 +860,12 @@ body {
   margin: 2px 0 0;
 }
 
-.cbe-help kbd,
+.cbe-inspector kbd,
 .cbe-help code {
   font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-.cbe-help kbd {
+.cbe-inspector kbd {
   background: var(--cbe-control);
   border-radius: calc(4px * var(--cbe-round, 1));
   box-shadow: 0 0 0 0.5px var(--cbe-control-line), 0 1px 0 var(--cbe-control-line);

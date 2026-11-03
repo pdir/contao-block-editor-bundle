@@ -7,10 +7,11 @@
 // - otherwise single keys without modifiers, which can be switched off for screen readers
 //   (WCAG 2.1.4). Not "/" or "'": Firefox starts its quick find with them.
 
-export type Shortcut = 'help' | 'inspector' | 'nav-edit' | 'desktop' | 'tablet' | 'mobile';
+export type Shortcut = 'help' | 'edit' | 'inspector' | 'nav-edit' | 'desktop' | 'tablet' | 'mobile';
 
 const SINGLE_KEYS: Record<string, Shortcut> = {
   '?': 'help',
+  e: 'edit',
   i: 'inspector',
   n: 'nav-edit',
   1: 'desktop',

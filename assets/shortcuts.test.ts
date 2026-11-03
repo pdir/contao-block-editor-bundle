@@ -21,6 +21,7 @@ describe('shortcutFor', () => {
 
   it('knows the single keys', () => {
     expect(shortcutFor(press({ key: '?' }), true)).toBe('help');
+    expect(shortcutFor(press({ key: 'e' }), true)).toBe('edit');
     expect(shortcutFor(press({ key: 'i' }), true)).toBe('inspector');
     expect(shortcutFor(press({ key: 'n' }), true)).toBe('nav-edit');
     expect(shortcutFor(press({ key: '3' }), true)).toBe('mobile');

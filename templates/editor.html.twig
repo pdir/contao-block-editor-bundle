@@ -41,6 +41,9 @@
                     <strong id="cbe-title" class="cbe-title">{{ title }}</strong>
                     <span id="cbe-status" class="cbe-status" role="status" aria-live="polite"></span>
                 </div>
+                <button id="cbe-edit-toggle" class="cbe-icon-button" type="button" aria-pressed="true" aria-label="Bearbeiten" title="Bearbeiten ein- oder ausschalten (E)">
+                    <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M10.5 2.5 13.5 5.5 5.5 13.5H2.5V10.5Z"/><path d="m8.5 4.5 3 3"/></svg>
+                </button>
                 {% set options = preview_options %}
                 <div class="cbe-preview">
                     <button id="cbe-preview-toggle" class="cbe-icon-button" type="button" aria-expanded="false" aria-controls="cbe-preview-menu" aria-label="Vorschau" title="Vorschau: Adresse, Mitglied, nicht veröffentlichte Elemente"{% if options.member or options.show_unpublished %} data-active{% endif %}>
@@ -88,6 +91,10 @@
                 </aside>
                 <template id="cbe-help">
                     <p class="cbe-hint">Klicke auf ein Element, um es zu bearbeiten.</p>
+                    <div class="cbe-viewing">
+                        <p class="cbe-hint">Bearbeiten ist aus. Links führen zu ihrer Seite.</p>
+                        <p class="cbe-description">Wieder einschalten mit dem Stift oben oder der Taste <kbd>E</kbd>.</p>
+                    </div>
                     <section class="cbe-help" aria-labelledby="cbe-help-title">
                         <h2 id="cbe-help-title">So funktioniert der Editor</h2>
                         <dl>
@@ -127,6 +134,8 @@
                         <details id="cbe-shortcuts" class="cbe-help-more">
                             <summary>Globale Tastaturbefehle</summary>
                             <dl>
+                                <dt>Bearbeiten ein/aus</dt>
+                                <dd><kbd>E</kbd> schaltet ein und aus. Ausgeschaltet führt jeder Link zu seiner Seite.</dd>
                                 <dt>Inspector ein/aus</dt>
                                 <dd><kbd>I</kbd> oder <kbd data-key="mod">Strg</kbd> + <kbd data-key="shift">Umschalt</kbd> + <kbd>,</kbd>, das geht auch beim Schreiben.</dd>
                                 <dt>Navigationslinks bearbeiten</dt>

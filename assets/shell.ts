@@ -779,6 +779,7 @@ window.addEventListener('message', (event) => {
 
       currentLoad = message.load;
       showCorners(storedRoundCorners());
+      showEditing(editing);
       selectedPage = null;
       recordSelected = false;
 
@@ -946,20 +947,55 @@ inspectorToggle.addEventListener('click', () => showInspector(Boolean(inspector.
 
 showInspector(storedInspector());
 
-/** The page in the preview is same-origin, so its root gets the attribute directly. */
+/** The page in the preview is same-origin, so its root gets attributes directly. */
+function pageRoot(): HTMLElement | null {
+  try {
+    return frame.contentDocument?.documentElement ?? null;
+  } catch {
+    // Not loaded yet: the next cbe:ready applies them
+    return null;
+  }
+}
+
 function showCorners(round: boolean, store = false): void {
   applyCorners(root, round, store);
 
-  try {
-    const page = frame.contentDocument?.documentElement;
+  const page = pageRoot();
 
-    if (page) {
-      applyCorners(page, round);
-    }
-  } catch {
-    // Not loaded yet: the next cbe:ready applies it
+  if (page) {
+    applyCorners(page, round);
   }
 }
+
+const editToggle = document.getElementById('cbe-edit-toggle') as HTMLButtonElement;
+let editing = true;
+
+/** Off, the page is only looked at and every link leads to its page. On with every new editor. */
+function showEditing(enabled: boolean): void {
+  editing = enabled;
+  editToggle.setAttribute('aria-pressed', String(enabled));
+
+  for (const node of [root, pageRoot()]) {
+    node?.toggleAttribute('data-cbe-viewing', !enabled);
+  }
+}
+
+function setEditing(enabled: boolean): void {
+  showEditing(enabled);
+
+  if (!enabled) {
+    // Saves what is being typed and forgets the selection
+    post({ type: 'cbe:end' });
+    selected = null;
+    selectedPage = null;
+    recordSelected = false;
+    renderInspector();
+  }
+
+  setStatus(enabled ? 'Bearbeiten: an' : 'Bearbeiten: aus, nur ansehen');
+}
+
+editToggle.addEventListener('click', () => setEditing(!editing));
 
 /** Only a reader page has a record. One that is still being saved keeps its queue until done. */
 function loadRecord(record: FrameRecord | null): void {
@@ -1077,6 +1113,8 @@ function showShortcuts(): void {
 function runShortcut(name: Shortcut): void {
   if (name === 'help') {
     showShortcuts();
+  } else if (name === 'edit') {
+    setEditing(!editing);
   } else if (name === 'inspector') {
     showInspector(Boolean(inspector.hidden), true);
   } else if (name === 'nav-edit') {
