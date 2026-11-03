@@ -17,8 +17,8 @@ use Pdir\ContaoBlockEditorBundle\Security\FieldPolicy;
 use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
- * Saves the headline of a news or event from its reader page, on the same path as the
- * back end: permissions, validation, callbacks and versioning.
+ * Saves the headline of a news or event from its reader page or the meta data of a page,
+ * on the same path as the back end: permissions, validation, callbacks and versioning.
  */
 final class RecordUpdater
 {

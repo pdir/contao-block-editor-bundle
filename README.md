@@ -27,7 +27,9 @@ Unter „Mehr erfahren“ im Inspector lässt sich „Navigationslinks bearbeite
 ändert dann den Seitennamen direkt im Menü, und der Inspector zeigt die weiteren Angaben der Seite. Es gelten die Rechte
 für Seiten aus dem Backend, gespeichert wird mit Versionierung wie bei den Elementen.
 Auf der Detailseite einer Nachricht oder eines Events lassen sich der Titel (bei Nachrichten auch die Unterüberschrift)
-direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends.
+direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends. Ist kein Element
+ausgewählt, zeigt der Inspector Seitentitel und Beschreibung der aktuellen Seite für Suchmaschinen; sie werden ebenso
+gespeichert.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu
 bewegen: Dann führt jeder Link zu seiner Seite. Jeder neue Editor startet mit eingeschaltetem Bearbeiten.
 Die Tastaturbefehle erklärt der Inspector unter „Globale Tastaturbefehle“ (Taste `?`). Einzelne Tasten wirken nur,

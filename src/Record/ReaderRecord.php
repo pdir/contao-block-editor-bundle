@@ -20,18 +20,22 @@ use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 
 /**
- * The news or event that a reader module shows. Its headline is no content element but a
- * field of the record, which the reader module finds by the last part of the address.
+ * Records with fields that the editor changes besides the content elements: the news or
+ * event that a reader module shows, whose headline is a field of the record and which the
+ * module finds by the last part of the address, and the meta data of the page itself.
  */
 final class ReaderRecord
 {
     /**
-     * The tables with a reader module: its CSS class, the back end module, the model that
-     * tells whether the bundle is installed and the fields a reader shows as plain text.
+     * The tables: the CSS class of their reader module, the back end module, the model that
+     * tells whether the bundle is installed, the fields the editor changes and the field
+     * whose value is used when one of them is empty.
      */
     public const READERS = [
-        'tl_news' => ['class' => 'mod_newsreader', 'module' => 'news', 'model' => 'Contao\NewsModel', 'label' => 'Nachricht', 'fields' => ['headline', 'subheadline']],
-        'tl_calendar_events' => ['class' => 'mod_eventreader', 'module' => 'calendar', 'model' => 'Contao\CalendarEventsModel', 'label' => 'Event', 'fields' => ['title']],
+        'tl_news' => ['class' => 'mod_newsreader', 'module' => 'news', 'model' => 'Contao\NewsModel', 'label' => 'Nachricht', 'fields' => ['headline', 'subheadline'], 'fallbacks' => []],
+        'tl_calendar_events' => ['class' => 'mod_eventreader', 'module' => 'calendar', 'model' => 'Contao\CalendarEventsModel', 'label' => 'Event', 'fields' => ['title'], 'fallbacks' => []],
+        // Without a page title, Contao shows the name of the page
+        'tl_page' => ['class' => null, 'module' => 'page', 'model' => 'Contao\PageModel', 'label' => 'Seite', 'fields' => ['pageTitle', 'description'], 'fallbacks' => ['pageTitle' => 'title']],
     ];
 
     public function __construct(
@@ -62,7 +66,7 @@ final class ReaderRecord
         }
 
         foreach (self::READERS as $table => $reader) {
-            if (!self::supports($table) || !preg_match('/class="[^"]*\b'.$reader['class'].'\b/', $html)) {
+            if (null === $reader['class'] || !self::supports($table) || !preg_match('/class="[^"]*\b'.$reader['class'].'\b/', $html)) {
                 continue;
             }
 
@@ -111,11 +115,15 @@ final class ReaderRecord
         $fields = [];
 
         foreach ($this->fields($table) as $field) {
+            $fallback = self::READERS[$table]['fallbacks'][$field] ?? null;
+
             $fields[] = [
                 'name' => $field,
                 'label' => $this->label($table, $field),
                 'value' => StringUtil::convertBasicEntities((string) $row[$field]),
                 'editable' => $editable && $this->fieldPolicy->canEdit($table, $field),
+                'multiline' => 'textarea' === ($GLOBALS['TL_DCA'][$table]['fields'][$field]['inputType'] ?? null),
+                'placeholder' => null === $fallback ? '' : StringUtil::convertBasicEntities((string) $row[$fallback]),
             ];
         }
 

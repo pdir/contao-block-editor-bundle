@@ -5,7 +5,7 @@ import type { FrameElement, FramePage, FrameRecord, InlineConfig, ToFrame, ToShe
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 import type { NavPages } from './nav-pages';
-import type { ReaderRecord } from './reader-record';
+import type { ReaderRecord, ReaderRecordOptions } from './reader-record';
 import { applyCorners, applyInspector, applyViewport, storedInspector, storedNavEdit, storedRoundCorners, storedSingleKeys, storedViewport, storeNavEdit, storeSingleKeys, type Viewport } from './settings';
 import { isMac, shortcutFor, type Shortcut } from './shortcuts';
 
@@ -65,6 +65,8 @@ let navPages: Promise<NavPages> | null = null;
 /** The news or event of a reader page, and whether it is shown in the inspector. */
 let readerRecord: Promise<ReaderRecord> | null = null;
 let recordSelected = false;
+/** Title and description of the page in the frame, for search engines. */
+let pageMeta: Promise<ReaderRecord> | null = null;
 /** The document in the frame that the shown data belongs to. */
 let currentLoad: number | null = null;
 let readySinceLoad = false;
@@ -298,6 +300,7 @@ async function goTo(url: string, addToHistory: boolean): Promise<void> {
   await queue.settle();
   await navPages?.then((pages) => pages.settle());
   await readerRecord?.then((record) => record.settle());
+  await pageMeta?.then((meta) => meta.settle());
 
   if (current !== navigation) {
     return;
@@ -710,6 +713,7 @@ function renderInspector(): void {
   const element = selected === null ? undefined : elements.get(selected);
 
   void readerRecord?.then((record) => record.forget());
+  void pageMeta?.then((meta) => meta.forget());
 
   if (!element && recordSelected && readerRecord) {
     void readerRecord.then((record) => {
@@ -744,6 +748,14 @@ function renderInspector(): void {
       inspector.append(help.content.cloneNode(true));
       bindSettings();
       labelKeys(inspector);
+
+      const section = inspector.querySelector<HTMLElement>('.cbe-page-meta');
+
+      void pageMeta?.then((meta) => {
+        if (section?.isConnected) {
+          meta.render(section);
+        }
+      });
     }
 
     return;
@@ -787,6 +799,7 @@ window.addEventListener('message', (event) => {
         post({ type: 'cbe:nav-edit', enabled: true });
       }
       loadRecord(message.record);
+      loadPageMeta(message.page);
       resetPage();
       showPage(message.page);
       loadElements(message.ids.filter(Number.isInteger), message.load, message.page).catch((error: Error) => setStatus(error.message, true));
@@ -997,18 +1010,26 @@ function setEditing(enabled: boolean): void {
 
 editToggle.addEventListener('click', () => setEditing(!editing));
 
-/** Only a reader page has a record. One that is still being saved keeps its queue until done. */
-function loadRecord(record: FrameRecord | null): void {
-  const previous = readerRecord;
-
-  readerRecord = record ? (import(readerRecordUrl) as Promise<typeof import('./reader-record')>).then(async ({ setupReaderRecord }) => {
+/** One that is still being saved keeps its queue until done. */
+function setupRecord(previous: Promise<ReaderRecord> | null, record: FrameRecord, options: Pick<ReaderRecordOptions, 'post' | 'hint' | 'lengths'>): Promise<ReaderRecord> {
+  return (import(readerRecordUrl) as Promise<typeof import('./reader-record')>).then(async ({ setupReaderRecord }) => {
     await previous?.then((loaded) => loaded.settle());
 
-    const loaded = setupReaderRecord(record, { token, url: recordsUrl, post, setStatus });
+    const loaded = setupReaderRecord(record, { token, url: recordsUrl, setStatus, ...options });
     await loaded.load().catch((error: Error) => setStatus(error.message, true));
 
     return loaded;
-  }) : null;
+  });
+}
+
+/** Only a reader page has a record. */
+function loadRecord(record: FrameRecord | null): void {
+  readerRecord = record ? setupRecord(readerRecord, record, { post, hint: 'Auch direkt in der Seite änderbar. Weitere Angaben im klassischen Backend.' }) : null;
+}
+
+/** The meta data of the page, shown when no element is selected. */
+function loadPageMeta(page: FramePage | null): void {
+  pageMeta = page ? setupRecord(pageMeta, { table: 'tl_page', id: page.id, scope: '' }, { lengths: { pageTitle: 60, description: 160 } }) : null;
 }
 
 function loadNavPages(): Promise<NavPages> {
@@ -1177,6 +1198,7 @@ window.addEventListener('pagehide', () => {
   queue.flush(true);
   void navPages?.then((pages) => pages.flush(true));
   void readerRecord?.then((record) => record.flush(true));
+  void pageMeta?.then((meta) => meta.flush(true));
 });
 
 window.addEventListener('beforeunload', (event) => {

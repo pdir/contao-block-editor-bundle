@@ -140,9 +140,10 @@ final class ApiController
     }
 
     /**
-     * The news or event of a reader page, whose headline is a field of the record.
+     * The news or event of a reader page, whose headline is a field of the record, or the
+     * meta data of the page.
      */
-    #[Route('/records/{table}/{id}', name: 'pdir_block_editor_api_record', requirements: ['table' => 'tl_news|tl_calendar_events', 'id' => '[1-9]\d{0,9}'], methods: ['GET'])]
+    #[Route('/records/{table}/{id}', name: 'pdir_block_editor_api_record', requirements: ['table' => 'tl_news|tl_calendar_events|tl_page', 'id' => '[1-9]\d{0,9}'], methods: ['GET'])]
     public function record(Request $request, string $table, int $id): Response
     {
         return $this->handle(function () use ($request, $table, $id): Response {
@@ -152,7 +153,7 @@ final class ApiController
         });
     }
 
-    #[Route('/records/{table}/{id}', name: 'pdir_block_editor_api_record_update', requirements: ['table' => 'tl_news|tl_calendar_events', 'id' => '[1-9]\d{0,9}'], methods: ['PATCH'])]
+    #[Route('/records/{table}/{id}', name: 'pdir_block_editor_api_record_update', requirements: ['table' => 'tl_news|tl_calendar_events|tl_page', 'id' => '[1-9]\d{0,9}'], methods: ['PATCH'])]
     public function updateRecord(Request $request, string $table, int $id): Response
     {
         return $this->handle(function () use ($request, $table, $id): Response {

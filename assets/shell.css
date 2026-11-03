@@ -427,7 +427,8 @@ body {
   flex-shrink: 0;
 }
 
-.cbe-inspector > h2 {
+.cbe-inspector > h2,
+.cbe-page-meta > h2 {
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.015em;
@@ -808,6 +809,25 @@ body {
 .cbe-inspector > .cbe-button {
   align-self: flex-start;
   margin-bottom: 12px;
+}
+
+/* Title and description of the page, when no element is selected */
+.cbe-page-meta {
+  display: flex;
+  flex-direction: column;
+}
+
+.cbe-page-meta:empty,
+:root[data-cbe-viewing] .cbe-page-meta {
+  display: none;
+}
+
+.cbe-page-meta .cbe-description {
+  white-space: normal;
+}
+
+.cbe-page-meta > .cbe-link {
+  align-self: flex-start;
 }
 
 /* Editing switched off: the inspector says how to switch it on again */
