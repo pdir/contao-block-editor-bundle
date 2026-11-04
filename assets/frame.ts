@@ -6,7 +6,7 @@ import { RecordFields } from './record-fields';
 import { classifyLink, linkLabel, type FramePaths } from './navigation';
 import type { FrameElement, FramePage, FrameRecord, InlineConfig, MovePosition, ToFrame, ToShell } from './protocol';
 import { readMessage } from './protocol';
-import { createRichEditor, editLink, renderFormatBar, richValue } from './rich-text';
+import type * as RichText from './rich-text';
 import { canEditInline } from './rich-text-policy';
 import { storedSingleKeys } from './settings';
 import { cellHtml, cellText, insertColumn, insertRow, isPlainCell, matchRows, removeColumn, removeRow, setCell, toRows, type Rows } from './table-data';
@@ -198,9 +198,46 @@ function setHtml(target: HTMLElement, html: string): void {
   target.replaceChildren(...Array.from(parsed.body.childNodes).map((node) => document.adoptNode(node)));
 }
 
+/**
+ * The text editor (Tiptap) is most of the code of the frame. It is loaded when the page is idle,
+ * so the page shows up without waiting for it, and at the latest with the first click into a text.
+ */
+let rich: typeof RichText | null = null;
+let richLoading: Promise<void> | null = null;
+
+function loadRich(): Promise<void> {
+  richLoading ??= (import(script?.dataset.cbeRichText ?? '') as Promise<typeof RichText>).then((module) => {
+    rich = module;
+  }, (error: unknown) => {
+    // Another try with the next click
+    richLoading = null;
+    console.error('[block-editor] Der Texteditor konnte nicht geladen werden:', error);
+  });
+
+  return richLoading;
+}
+
+/** Counts the activations: a start that waited for the editor only happens if nothing came after it. */
+let activations = 0;
+
 function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
   const target = inlineTarget(inline, root);
   const { field } = inline;
+
+  if (!rich) {
+    const current = activations;
+
+    void loadRich().then(() => {
+      if (rich && current === activations && !session && !viewing() && root.isConnected) {
+        startRich(element, inline, root, event);
+        addParentButton(root);
+      }
+    });
+
+    return false;
+  }
+
+  const { createRichEditor, renderFormatBar, richValue } = rich;
 
   // No data for this field: never empty the rendered content because of that
   if (element.values?.[field] === undefined) {
@@ -700,6 +737,7 @@ function endSession(): void {
 }
 
 function activate(id: number, root: HTMLElement, event: PointerEvent | null): boolean {
+  activations++;
   const element = known.get(id) as FrameElement;
   const inline = chooseInline(element, root, event?.target ?? null);
   let caretPlaced = false;
@@ -767,8 +805,15 @@ function showLinkActions(link: HTMLAnchorElement | HTMLAreaElement, id: number, 
       const text = link.textContent ?? '';
 
       linkBar.hide();
-      activate(id, root, null);
-      selectLink(text, index);
+      // The editor must be there to select the link in it
+      void loadRich().then(() => {
+        if (!rich) {
+          return;
+        }
+
+        activate(id, root, null);
+        selectLink(text, index);
+      });
     } : null,
     hint: 'Änderbar in der Seitenleiste oder im klassischen Backend',
     close: () => {
@@ -816,11 +861,11 @@ function refreshLinkBar(requested = false): void {
   const editor = session?.editor;
   const element = session?.element;
 
-  if (!editor || !element) {
+  if (!editor || !element || !rich) {
     return;
   }
 
-  editLink(linkBar, editor, {
+  rich.editLink(linkBar, editor, {
     requested,
     anchor: () => (editor.isDestroyed ? null : editor.view.coordsAtPos(editor.state.selection.from)),
     pick: (current, done) => pickLink(element.id, current, done),
@@ -1276,6 +1321,9 @@ function showNavActions(link: HTMLAnchorElement, editable: boolean): void {
 const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
 const [recordTable, recordId] = (script?.dataset.cbeRecord ?? '').split('.');
 const frameRecord: FrameRecord | null = recordId ? { table: recordTable, id: Number(recordId), scope: script?.dataset.cbeRecordScope ?? '' } : null;
+
+// Ready before the first click into a text in most cases, without delaying the page
+(window.requestIdleCallback ?? ((run: () => void) => setTimeout(run, 300)))(() => void loadRich());
 
 // The page is a canvas in here: only links outside of editable elements navigate. Only
 // looked at, every link leads to its page and the page's own buttons work.

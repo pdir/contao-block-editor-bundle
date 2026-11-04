@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild assets/shell.ts assets/frame.ts assets/rich-editor.ts assets/preview-menu.ts assets/nav-pages.ts assets/reader-record.ts assets/inserter.ts assets/table-field.ts assets/shell.css assets/frame.css --bundle --minify --format=esm --target=es2022 --outdir=public --metafile=var-meta.json --log-level=warning && esbuild assets/restore-settings.ts --bundle --minify --format=iife --target=es2022 --outfile=public/restore-settings.js --log-level=warning && node assets/check-budget.mjs",
+    "build": "esbuild assets/shell.ts assets/frame.ts assets/rich-editor.ts assets/preview-menu.ts assets/nav-pages.ts assets/reader-record.ts assets/inserter.ts assets/table-field.ts assets/rich-text.ts assets/shell.css assets/frame.css --bundle --minify --format=esm --target=es2022 --outdir=public --metafile=var-meta.json --log-level=warning && esbuild assets/restore-settings.ts --bundle --minify --format=iife --target=es2022 --outfile=public/restore-settings.js --log-level=warning && node assets/check-budget.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

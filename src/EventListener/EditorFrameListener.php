@@ -145,7 +145,7 @@ final class EditorFrameListener
         $nonceAttribute = null === $nonce ? '' : ' nonce="'.$nonce.'"';
         $url = fn (string $file): string => htmlspecialchars($this->assets->url($file, $request->getBasePath()), ENT_QUOTES);
         $page = $request->attributes->get('pageModel');
-        $attributes = ' data-cbe-base="'.htmlspecialchars($request->getBasePath(), ENT_QUOTES).'" data-cbe-preview="'.htmlspecialchars($request->getBaseUrl(), ENT_QUOTES).'"';
+        $attributes = ' data-cbe-base="'.htmlspecialchars($request->getBasePath(), ENT_QUOTES).'" data-cbe-preview="'.htmlspecialchars($request->getBaseUrl(), ENT_QUOTES).'" data-cbe-rich-text="'.$url('rich-text.js').'"';
 
         if ($page instanceof PageModel) {
             $attributes .= ' data-cbe-page-id="'.(int) $page->id.'" data-cbe-page-title="'.htmlspecialchars(html_entity_decode((string) ($page->pageTitle ?: $page->title), ENT_QUOTES), ENT_QUOTES).'"';
