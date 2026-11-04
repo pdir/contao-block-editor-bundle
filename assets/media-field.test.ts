@@ -6,8 +6,13 @@ const config = { multiple: true, filesOnly: true, folders: false, extensions: ['
 
 describe('media field', () => {
   it('keeps the order of a gallery and adds new files last', () => {
-    expect(mergeChoice(['a', 'b', 'c'], ['c', 'd', 'a'])).toEqual(['a', 'c', 'd']);
-    expect(mergeChoice(['a'], [])).toEqual([]);
+    const file = (uuid: string) => ({ uuid, path: `files/${uuid}.jpg`, name: `${uuid}.jpg`, image: true, preview: null });
+    const current = [file('b'), file('a'), file('c')];
+
+    // The picker sends paths in its own order
+    expect(mergeChoice(current, ['files/a.jpg', 'files/c.jpg', 'files/new.jpg'])).toEqual(['a', 'c', 'files/new.jpg']);
+    expect(mergeChoice(current, ['c', 'b'])).toEqual(['b', 'c']);
+    expect(mergeChoice(current, [])).toEqual([]);
   });
 
   it('reads saved files and pending choices', () => {

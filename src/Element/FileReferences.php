@@ -13,6 +13,7 @@ use Contao\Validator;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
 use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
+use Symfony\Component\HttpFoundation\RequestStack;
 
 /**
  * The files of a file tree field (an image, the images of a gallery, a download), as the editor
@@ -30,6 +31,7 @@ final class FileReferences
         private readonly ContaoFramework $framework,
         private readonly ImageFactoryInterface $imageFactory,
         private readonly Security $security,
+        private readonly RequestStack $requestStack,
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir,
     ) {
@@ -123,7 +125,10 @@ final class FileReferences
     private function preview(string $path): string|null
     {
         try {
-            return $this->imageFactory->create($this->projectDir.'/'.$path, self::PREVIEW_SIZE)->getUrl($this->projectDir);
+            $url = $this->imageFactory->create($this->projectDir.'/'.$path, self::PREVIEW_SIZE)->getUrl($this->projectDir);
+
+            // Relative to the web root: the editor itself lives below /contao
+            return preg_match('~^(?:[a-z]+:)?//|^/~i', $url) ? $url : ($this->requestStack->getCurrentRequest()?->getBasePath() ?? '').'/'.$url;
         } catch (\Throwable) {
             return null;
         }

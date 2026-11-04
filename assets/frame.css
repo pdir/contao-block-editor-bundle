@@ -280,8 +280,8 @@ cto-toolbar,
   }
 }
 
-/* A cell of a table or an item of a list being typed in */
-.cbe-editable :is(td, th, li)[contenteditable] {
+/* A cell of a table, an item of a list or a term being typed in */
+.cbe-editable :is(td, th, li, dt, dd)[contenteditable] {
   outline: 2px solid #f47c00;
   outline-offset: -2px;
 }
@@ -289,4 +289,10 @@ cto-toolbar,
 .cbe-format-bar button:disabled {
   cursor: default;
   opacity: 0.35;
+}
+
+/* A term or detail added or emptied in the page: it stays visible to type into */
+.cbe-editable [data-cbe-blank]:empty {
+  min-height: 1lh;
+  min-width: 4ch;
 }

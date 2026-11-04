@@ -138,10 +138,11 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
     return table;
   }
 
-  const file = element.inline.find(({ mode }) => mode === 'file');
+  const terms = element.inline.find(({ mode }) => mode === 'terms');
+  const term = hit instanceof Element ? hit.closest('dt, dd') : null;
 
-  if (file && hit instanceof Element && hit.closest('img, picture, video') && root.contains(hit)) {
-    return file;
+  if (terms && term && term.closest('dl') === root.querySelector(terms.selector ?? 'dl')) {
+    return terms;
   }
 
   const list = element.inline.find(({ mode }) => mode === 'list');
@@ -172,7 +173,7 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
     return riches[0];
   }
 
-  return hit ? null : plainTarget ? (plain as InlineConfig) : table ?? list ?? null;
+  return hit ? null : plainTarget ? (plain as InlineConfig) : table ?? list ?? terms ?? null;
 }
 
 function toShell(message: ToShell): void {
@@ -444,13 +445,24 @@ function dataRow(table: HTMLTableElement, row: HTMLTableRowElement, rows: Rows):
   return head + (matched[at - head] ?? at - head);
 }
 
-/** A click on an image: the bar offers another one, which the shell lets the user choose. */
-function startFile(element: FrameElement, inline: InlineConfig, event: PointerEvent | null): boolean {
-  const image = event?.target instanceof Element ? event.target.closest<HTMLElement>('img, picture, video') : null;
-
-  if (!image) {
-    return false;
+/**
+ * The image under the pointer. Found by its position: cards often lay their link over the
+ * whole card, so the click itself hits the link.
+ */
+function imageAt(element: FrameElement, root: HTMLElement, event: PointerEvent | null): HTMLElement | null {
+  if (!event || !element.inline.some(({ mode }) => mode === 'file')) {
+    return null;
   }
+
+  return Array.from(root.querySelectorAll<HTMLElement>('img, video')).find((image) => {
+    const { left, right, top, bottom } = image.getBoundingClientRect();
+
+    return event.clientX >= left && event.clientX <= right && event.clientY >= top && event.clientY <= bottom;
+  }) ?? null;
+}
+
+/** A click on an image: the bar offers another one, which the shell lets the user choose. */
+function startFile(element: FrameElement, inline: InlineConfig, image: HTMLElement): boolean {
 
   const many = Array.isArray(element.values[inline.field]) && (element.values[inline.field] as unknown[]).length > 1;
   const title = many ? 'Bilder auswählen' : 'Bild austauschen';
@@ -484,6 +496,146 @@ function startFile(element: FrameElement, inline: InlineConfig, event: PointerEv
   return false;
 }
 
+type Term = { key: string; value: string };
+const TERM_COLUMNS = [['key', 'DT'], ['value', 'DD']] as const;
+
+/**
+ * Which row and column each term (dt) and detail (dd) of the page shows. Templates leave out
+ * empty ones; those added or emptied here are marked, so they are still counted.
+ */
+function termLayout(dl: HTMLElement, rows: Term[]): { part: HTMLElement; row: number; column: 'key' | 'value' }[] | null {
+  const parts = Array.from(dl.querySelectorAll<HTMLElement>('dt, dd')).filter((part) => part.closest('dl') === dl);
+  const layout: { part: HTMLElement; row: number; column: 'key' | 'value' }[] = [];
+
+  rows.forEach((row, index) => {
+    for (const [column, tag] of TERM_COLUMNS) {
+      const part = parts[layout.length];
+
+      if (row[column] !== '' || (part?.tagName === tag && part.hasAttribute('data-cbe-blank'))) {
+        layout.push({ part, row: index, column });
+      }
+    }
+  });
+
+  return layout.length === parts.length && layout.every(({ part, column }) => part?.tagName === (column === 'key' ? 'DT' : 'DD')) ? layout : null;
+}
+
+/** The clicked term, or the first one for the keyboard. */
+function startTerms(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
+  const dl = root.querySelector<HTMLElement>(inline.selector ?? 'dl');
+  const hit = event?.target instanceof Element ? event.target.closest<HTMLElement>('dt, dd') : dl?.querySelector<HTMLElement>('dt, dd');
+
+  return Boolean(dl && hit && hit.closest('dl') === dl && startTerm(element, inline, dl, hit, event));
+}
+
+/** A term or a detail: Enter goes on to the detail, then to a new entry. */
+function startTerm(element: FrameElement, inline: InlineConfig, dl: HTMLElement, part: HTMLElement, event: PointerEvent | null, select = true): boolean {
+  const { field } = inline;
+  const rows = (): Term[] => (Array.isArray(element.values[field]) ? element.values[field] as Term[] : []).map((row) => ({ key: String(row?.key ?? ''), value: String(row?.value ?? '') }));
+  const save = (next: Term[]): void => saveParts(element, field, next);
+  const layout = termLayout(dl, rows());
+  const place = layout?.find((entry) => entry.part === part);
+  const restart = (next: HTMLElement, selectNext = true): void => void startTerm(element, inline, dl, next, null, selectNext);
+
+  // A template of its own may show the entries in another way
+  if (!layout || !place) {
+    return false;
+  }
+
+  const { row, column } = place;
+  const ofRow = layout.filter((entry) => entry.row === row).map((entry) => entry.part);
+  // Wrapped per entry (dl > div > dt + dd) or one after the other
+  const wrapper = part.parentElement !== dl ? part.parentElement : null;
+
+  const blank = (tag: 'dt' | 'dd'): HTMLElement => {
+    const created = document.createElement(tag);
+    created.setAttribute('data-cbe-blank', '');
+
+    return created;
+  };
+
+  const detail = (): HTMLElement => {
+    const existing = ofRow.find((entry) => entry.tagName === 'DD');
+
+    if (existing) {
+      return existing;
+    }
+
+    const created = blank('dd');
+    part.after(created);
+
+    return created;
+  };
+
+  const add = (): HTMLElement => {
+    const term = blank('dt');
+    const created = blank('dd');
+
+    save([...rows().slice(0, row + 1), { key: '', value: '' }, ...rows().slice(row + 1)]);
+
+    if (wrapper) {
+      const copy = wrapper.cloneNode(false) as HTMLElement;
+      copy.append(term, created);
+      wrapper.after(copy);
+    } else {
+      (ofRow.at(-1) as HTMLElement).after(term, created);
+    }
+
+    return term;
+  };
+
+  const remove = (): HTMLElement | undefined => {
+    const others = layout.filter((entry) => entry.row !== row);
+    const next = others.find((entry) => entry.row > row) ?? others.at(-1);
+
+    save(rows().filter((_, index) => index !== row));
+
+    if (wrapper) {
+      wrapper.remove();
+    } else {
+      ofRow.forEach((entry) => entry.remove());
+    }
+
+    return next?.part;
+  };
+
+  return startPart(element, inline, part, rows()[row][column], event, select, {
+    label: 'Beschreibungsliste',
+    anchor: dl,
+    text: true,
+    input(typed) {
+      part.toggleAttribute('data-cbe-blank', typed === '');
+      save(rows().map((entry, index) => (index === row ? { ...entry, [column]: typed } : entry)));
+    },
+    keydown(key) {
+      const all = layout.map((entry) => entry.part);
+      const empty = !part.innerText.trim() && ofRow.every((entry) => !entry.innerText.trim());
+      let next: HTMLElement | undefined;
+
+      if (key.key === 'Enter' && !key.shiftKey) {
+        next = column === 'key' ? detail() : add();
+      } else if (key.key === 'Tab') {
+        next = all[all.indexOf(part) + (key.shiftKey ? -1 : 1)];
+      } else if (key.key === 'Backspace' && empty && rows().length > 1) {
+        next = remove();
+      }
+
+      if (next) {
+        key.preventDefault();
+        endSession();
+        restart(next, key.key === 'Tab');
+      } else if (key.key === 'Enter') {
+        key.preventDefault();
+      }
+    },
+    restart,
+    tools: [
+      ['rowAfter', 'Eintrag darunter einfügen', true, add],
+      ['rowDelete', 'Eintrag löschen', rows().length > 1, remove],
+    ],
+  });
+}
+
 /** The clicked item, or the first one for the keyboard. */
 function startList(element: FrameElement, inline: InlineConfig, root: HTMLElement, event: PointerEvent | null): boolean {
   const list = root.querySelector<HTMLElement>(inline.selector ?? 'ul, ol');
@@ -513,15 +665,17 @@ function startPart(element: FrameElement, inline: InlineConfig, target: HTMLElem
   keydown(event: KeyboardEvent): void;
   tools: Tool[];
   restart(next: HTMLElement): void;
+  /** Stored as plain text, which the template escapes: no entities and no markup. */
+  text?: boolean;
 }): boolean {
   // Markup can only be kept in the inspector
-  if (!isPlainCell(html)) {
+  if (!options.text && !isPlainCell(html)) {
     return false;
   }
 
   const state = snapshot(element, inline, target);
 
-  target.innerText = cellText(html);
+  target.innerText = options.text ? html : cellText(html);
 
   try {
     target.contentEditable = 'plaintext-only';
@@ -543,7 +697,10 @@ function startPart(element: FrameElement, inline: InlineConfig, target: HTMLElem
     }
   }
 
-  const onInput = (): void => options.input(cellHtml(target.innerText.replace(/\n$/, '')));
+  const onInput = (): void => {
+    const typed = target.innerText.replace(/\n$/, '');
+    options.input(options.text ? typed : cellHtml(typed));
+  };
 
   target.addEventListener('input', onInput);
   target.addEventListener('keydown', options.keydown);
@@ -785,11 +942,12 @@ function endSession(): void {
 function activate(id: number, root: HTMLElement, event: PointerEvent | null): boolean {
   activations++;
   const element = known.get(id) as FrameElement;
-  const inline = chooseInline(element, root, event?.target ?? null);
+  const image = imageAt(element, root, event);
+  const inline = image ? element.inline.find(({ mode }) => mode === 'file') ?? null : chooseInline(element, root, event?.target ?? null);
   let caretPlaced = false;
 
   if (inline) {
-    caretPlaced = inline.mode === 'file' ? startFile(element, inline, event) : inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'list' ? startList(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
+    caretPlaced = inline.mode === 'file' && image ? startFile(element, inline, image) : inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'list' ? startList(element, inline, root, event) : inline.mode === 'terms' ? startTerms(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
   }
 
   if (session) {
@@ -1319,7 +1477,7 @@ document.addEventListener('pointerdown', (event) => {
 
   const link = linkIn(event.target);
   // An image that opens a larger version is chosen anew rather than followed
-  const onImage = event.target instanceof Element && event.target.closest('img, picture, video') && known.get(hit.id)?.inline.some(({ mode }) => mode === 'file');
+  const onImage = imageAt(known.get(hit.id) as FrameElement, hit.root, event);
 
   // A link is both a way to another page and a part of the text, so the user decides
   if (link && hit.root.contains(link) && !onImage) {
@@ -1614,7 +1772,7 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
   }
 
   // Only the server knows how the cells and items look: a rejected change is rendered by it again
-  if (inline.mode === 'table' || inline.mode === 'list' || inline.mode === 'file') {
+  if (inline.mode === 'table' || inline.mode === 'list' || inline.mode === 'terms' || inline.mode === 'file') {
     if (force) {
       void refresh(id);
     }

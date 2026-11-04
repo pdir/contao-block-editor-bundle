@@ -37,6 +37,8 @@ final class FieldPolicyTest extends TestCase
         yield 'list' => ['listitems', ['inputType' => 'listWizard', 'sql' => 'blob', 'eval' => ['multiple' => true, 'allowHtml' => true]], true];
         yield 'image' => ['singleSRC', ['inputType' => 'fileTree', 'sql' => ['type' => 'binary', 'length' => 16], 'eval' => ['filesOnly' => true, 'fieldType' => 'radio']], true];
         yield 'image size' => ['size', ['inputType' => 'imageSize', 'sql' => ['type' => 'string', 'length' => 255], 'eval' => ['rgxp' => 'natural']], true];
+        yield 'rows of text' => ['data', ['inputType' => 'rowWizard', 'sql' => 'text', 'fields' => ['key' => ['inputType' => 'text'], 'value' => ['inputType' => 'text']]], true];
+        yield 'rows with a picker' => ['data', ['inputType' => 'rowWizard', 'sql' => 'text', 'fields' => ['key' => ['inputType' => 'text'], 'page' => ['inputType' => 'pageTree']]], false];
         yield 'unfiltered html' => ['unfilteredHtml', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['preserveTags' => true]], false];
         yield 'code editor' => ['code', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['rte' => 'ace|html']], false];
         yield 'raw request data' => ['raw', [...$text, 'eval' => ['useRawRequestData' => true]], false];

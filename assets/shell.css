@@ -1065,16 +1065,24 @@ body {
   resize: none;
 }
 
-/* A list: one item per row, as wide as the inspector */
-.cbe-table-field--list .cbe-table-field__grid {
+/* A list or fixed columns: as wide as the inspector */
+.cbe-table-field--fill .cbe-table-field__grid {
   width: 100%;
 }
 
-.cbe-table-field--list .cbe-table-field__grid td {
+.cbe-table-field--fill .cbe-table-field__grid td:last-child {
   padding: 0;
 }
 
-.cbe-field .cbe-table-field--list textarea {
+.cbe-table-field__grid th {
+  color: var(--cbe-muted);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 0 2px;
+  text-align: start;
+}
+
+.cbe-field .cbe-table-field--fill textarea {
   width: 100%;
 }
 

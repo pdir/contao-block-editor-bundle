@@ -44,6 +44,8 @@ entfernt ihn. Einträge mit HTML bearbeitet der Inspector.
 Ein Klick auf ein Bild bietet an, es auszutauschen: Es öffnet sich der Dateiwähler von Contao mit den Dateitypen, die
 das Feld erlaubt. Im Inspector stehen die Dateien eines Elements mit Vorschau, bei Galerien in ihrer Reihenfolge, dazu die
 Bildgröße.
+Beschreibungslisten wie Kennzahlen oder Zeitleisten lassen sich Begriff für Begriff in der Seite bearbeiten: Enter springt vom
+Begriff zur Beschreibung und weiter zu einem neuen Eintrag.
 „Löschen“ im Inspector entfernt das gewählte Element samt verschachtelter Elemente, wenn der Benutzer es löschen darf.
 Wie im Backend landet es in „Wiederherstellen“; direkt danach holt „Rückgängig“ in der Kopfzeile es zurück.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu

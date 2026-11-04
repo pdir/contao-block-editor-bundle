@@ -215,6 +215,11 @@ final class ElementInspector
             $inline[] = ['field' => 'tableitems', 'selector' => 'table', 'mode' => 'table'];
         }
 
+        // The terms and details of a description list, each edited where it is shown
+        if ('description_list' === $type && \in_array('data', $fields, true)) {
+            $inline[] = ['field' => 'data', 'selector' => 'dl', 'mode' => 'terms'];
+        }
+
         // The items of the core's list, each edited where it is shown
         if ('list' === $type && \in_array('listitems', $fields, true)) {
             $inline[] = ['field' => 'listitems', 'selector' => 'ul, ol', 'mode' => 'list'];
@@ -377,6 +382,11 @@ final class ElementInspector
         return $loose ? [['label' => '', 'options' => $loose], ...$groups] : $groups;
     }
 
+    private static function columnLabel(mixed $label, string $name): string
+    {
+        return (string) (\is_array($label) ? ($label[0] ?? $name) : ($label ?? $name));
+    }
+
     /**
      * Allowed file types as a list; the core also names a container parameter here.
      *
@@ -425,6 +435,16 @@ final class ElementInspector
             return [(string) ($value[0] ?? ''), (string) ($value[1] ?? ''), (string) ($value[2] ?? '')];
         }
 
+        // Rows with exactly the columns of the field, as strings
+        if ('rowWizard' === ($config['inputType'] ?? null)) {
+            $names = array_keys($config['fields'] ?? []);
+
+            return \is_array($value) ? array_values(array_map(
+                static fn (mixed $row): array => array_combine($names, array_map(static fn (string $name): string => \is_array($row) && \is_scalar($row[$name] ?? null) ? (string) $row[$name] : '', $names)),
+                array_filter($value, \is_array(...)),
+            )) : [];
+        }
+
         if ('listWizard' === ($config['inputType'] ?? null)) {
             $value = \is_array($value) ? array_values(array_map(static fn (mixed $item): string => \is_scalar($item) ? (string) $item : '', $value)) : [];
         }
@@ -459,6 +479,14 @@ final class ElementInspector
                 'path' => (string) ($eval['path'] ?? ''),
                 'sortable' => !empty($eval['isSortable']),
             ];
+        }
+
+        if ('rowWizard' === $config['inputType']) {
+            $definition['columns'] = array_map(
+                static fn (string $name, array $column): array => ['name' => $name, 'label' => self::columnLabel($column['label'] ?? null, $name)],
+                array_keys($config['fields']),
+                array_values($config['fields']),
+            );
         }
 
         if ('imageSize' === $config['inputType']) {

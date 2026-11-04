@@ -49,7 +49,7 @@ final class RecordWriter
 
         // The shape must match the field: a string would overwrite all parts of a
         // multi-value field such as cssID.
-        $expectsArray = 'fileTree' !== $config['inputType'] && ('inputUnit' === $config['inputType'] || 'imageSize' === $config['inputType'] || !empty($config['eval']['multiple']));
+        $expectsArray = 'fileTree' !== $config['inputType'] && ('inputUnit' === $config['inputType'] || 'imageSize' === $config['inputType'] || 'rowWizard' === $config['inputType'] || !empty($config['eval']['multiple']));
 
         if (\is_array($value) !== $expectsArray || (!\is_array($value) && !\is_scalar($value))) {
             throw new ApiException(400, 'Ungültiger Wert.');
@@ -65,6 +65,15 @@ final class RecordWriter
 
         if ('listWizard' === $config['inputType'] && !self::isList($value)) {
             throw new ApiException(400, 'Ungültige Liste.');
+        }
+
+        if ('rowWizard' === $config['inputType']) {
+            if (!self::isRows($value, array_keys($config['fields'] ?? []))) {
+                throw new ApiException(400, 'Ungültige Einträge.');
+            }
+
+            // The row wizard counts the rows in "_rows" and reads each column on its own
+            $value = [...$value, '_rows' => array_fill(0, \count($value), '1')];
         }
 
         $class = $GLOBALS['BE_FFL'][$config['inputType']] ?? null;
@@ -160,6 +169,32 @@ final class RecordWriter
     {
         return \is_array($value) && array_is_list($value) && 3 === \count($value)
             && array_reduce($value, static fn (bool $valid, mixed $part): bool => $valid && \is_string($part) && \strlen($part) <= 64, true);
+    }
+
+    /**
+     * Rows with exactly the given columns, as strings.
+     *
+     * @param list<string> $columns
+     */
+    public static function isRows(mixed $value, array $columns): bool
+    {
+        if (!\is_array($value) || !array_is_list($value) || \count($value) > self::MAX_LIST_ITEMS || !$columns) {
+            return false;
+        }
+
+        foreach ($value as $row) {
+            if (!\is_array($row) || array_diff(array_keys($row), $columns) || array_diff($columns, array_keys($row))) {
+                return false;
+            }
+
+            foreach ($row as $cell) {
+                if (!\is_string($cell)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**

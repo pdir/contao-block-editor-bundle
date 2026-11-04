@@ -13,7 +13,7 @@ interface FieldSchema {
   name: string;
   label: string;
   description: string;
-  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard' | 'fileTree' | 'imageSize';
+  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard' | 'fileTree' | 'imageSize' | 'rowWizard';
   rich: boolean;
   multiple: boolean;
   mandatory: boolean;
@@ -21,6 +21,8 @@ interface FieldSchema {
   size: number;
   options: { value: string; label: string }[];
   unitOptions: string[];
+  /** The columns of a row wizard. */
+  columns?: { name: string; label: string }[];
   /** Which files the file tree takes. */
   files?: import('./media-field').FileConfig;
   /** The sizes of the themes and the resize modes, in groups. */
@@ -685,7 +687,8 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       break;
     }
     case 'tableWizard':
-    case 'listWizard': {
+    case 'listWizard':
+    case 'rowWizard': {
       const holder = document.createElement('div');
       const flag = (name: string): boolean => Boolean(element.values[name]) && element.values[name] !== '0';
 
@@ -699,7 +702,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
         }
 
         const list = field.input === 'listWizard';
-        const table = createTableField({ label: field.label, value: element.values[field.name], header: !list && flag('thead'), footer: !list && flag('tfoot'), list, change });
+        const table = createTableField({ label: field.label, value: element.values[field.name], header: !list && flag('thead'), footer: !list && flag('tfoot'), list, columns: field.columns, change });
 
         holder.append(table.root);
         fieldSync.set(field.name, (next) => table.sync(next));
@@ -843,7 +846,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
   wrapper.append(label, control);
 
   // The table wizard's description is about its form in the back end
-  if (field.description && field.input !== 'tableWizard' && field.input !== 'listWizard') {
+  if (field.description && !['tableWizard', 'listWizard', 'rowWizard'].includes(field.input)) {
     const description = document.createElement('p');
     description.className = 'cbe-description';
     description.textContent = field.description;
@@ -1146,20 +1149,23 @@ window.addEventListener('message', (event) => {
 
       if (element && field?.files) {
         const config = field.files;
-        const current = (element.values[field.name] as { uuid?: string }[] | undefined ?? []).map((file) => String(file?.uuid ?? file));
 
         mediaField ??= import(mediaFieldUrl) as Promise<typeof import('./media-field')>;
-        void mediaField.then(({ mergeChoice, filePickerUrl }) => openFilePicker(element.id, field, current, (chosen) => {
-          if (!chosen.length && field.mandatory) {
-            return;
-          }
+        void mediaField.then(({ mergeChoice, filePickerUrl, toFiles }) => {
+          const files = toFiles(element.values[field.name]);
 
-          const value = config.multiple ? mergeChoice(current, chosen) : chosen[0] ?? '';
+          openFilePicker(element.id, field, files.map(({ uuid }) => uuid), (chosen) => {
+            if (!chosen.length && field.mandatory) {
+              return;
+            }
 
-          element.values[field.name] = value;
-          typedInPage.delete(`${element.id}:${field.name}`);
-          queue.change(element.id, field.name, value);
-        }, filePickerUrl));
+            const value = config.multiple ? mergeChoice(files, chosen) : chosen[0] ?? '';
+
+            element.values[field.name] = value;
+            typedInPage.delete(`${element.id}:${field.name}`);
+            queue.change(element.id, field.name, value);
+          }, filePickerUrl);
+        });
       }
       break;
     }

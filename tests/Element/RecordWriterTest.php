@@ -65,6 +65,28 @@ final class RecordWriterTest extends TestCase
         yield 'string' => ['box', false];
     }
 
+    #[DataProvider('rows')]
+    public function testAcceptsOnlyRowsWithTheColumnsOfTheField(mixed $value, bool $expected): void
+    {
+        $this->assertSame($expected, RecordWriter::isRows($value, ['key', 'value']));
+    }
+
+    public static function rows(): iterable
+    {
+        yield 'rows' => [[['key' => 'Version', 'value' => '5.7'], ['value' => '', 'key' => '']], true];
+        yield 'no rows' => [[], true];
+        yield 'missing column' => [[['key' => 'Version']], false];
+        yield 'other column' => [[['key' => 'a', 'value' => 'b', 'enable' => '1']], false];
+        yield 'number' => [[['key' => 1, 'value' => 'b']], false];
+        yield 'not a list' => [['a' => ['key' => 'a', 'value' => 'b']], false];
+        yield 'too many' => [array_fill(0, 501, ['key' => '', 'value' => '']), false];
+    }
+
+    public function testTermsOfADescriptionListAreEditedInThePage(): void
+    {
+        $this->assertSame([['field' => 'data', 'selector' => 'dl', 'mode' => 'terms']], ElementInspector::inlineFields('description_list', ['data']));
+    }
+
     public function testListItemsAreEditedInThePage(): void
     {
         $this->assertSame([['field' => 'listitems', 'selector' => 'ul, ol', 'mode' => 'list']], ElementInspector::inlineFields('list', ['listitems', 'listtype']));

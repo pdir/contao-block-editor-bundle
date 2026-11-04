@@ -15,7 +15,7 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 final class FieldPolicy
 {
-    private const SUPPORTED_INPUT_TYPES = ['text', 'textarea', 'select', 'checkbox', 'radio', 'inputUnit', 'tableWizard', 'listWizard', 'fileTree', 'imageSize'];
+    private const SUPPORTED_INPUT_TYPES = ['text', 'textarea', 'select', 'checkbox', 'radio', 'inputUnit', 'tableWizard', 'listWizard', 'fileTree', 'imageSize', 'rowWizard'];
 
     /** Columns that define a record's identity, position or type. */
     private const PROTECTED_FIELDS = ['id', 'pid', 'ptable', 'sorting', 'tstamp', 'type'];
@@ -59,6 +59,11 @@ final class FieldPolicy
             }
         }
 
+        // Rows of text fields only, such as the terms and details of a description list
+        if ('rowWizard' === $config['inputType'] && !self::hasTextColumns($config)) {
+            return false;
+        }
+
         // Date values need a format conversion in DC_Table
         if (\in_array($eval['rgxp'] ?? null, ['date', 'time', 'datim'], true)) {
             return false;
@@ -68,6 +73,26 @@ final class FieldPolicy
         $rte = $eval['rte'] ?? null;
 
         return null === $rte || str_starts_with((string) $rte, 'tiny');
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    public static function hasTextColumns(array $config): bool
+    {
+        $columns = $config['fields'] ?? null;
+
+        if (!\is_array($columns) || !$columns) {
+            return false;
+        }
+
+        foreach ($columns as $name => $column) {
+            if (!\is_string($name) || !\is_array($column) || !\in_array($column['inputType'] ?? null, ['text', 'textarea'], true) || isset($column['eval']['rte'])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     public function canEdit(string $table, string $field): bool

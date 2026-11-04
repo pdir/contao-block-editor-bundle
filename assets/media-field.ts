@@ -24,7 +24,7 @@ export interface MediaField {
   sync(value: unknown): void;
 }
 
-const IMAGES = ['jpg', 'jpeg', 'gif', 'png', 'webp', 'avif', 'svg', 'svgz', 'heic', 'jxl'];
+const IMAGES = ['jpg', 'jpeg', 'gif', 'png', 'webp', 'avif', 'svg', 'svgz', 'heic', 'jxl', 'tif', 'tiff', 'bmp'];
 
 /** The files of a value: the server sends descriptions, a pending change only paths or UUIDs. */
 export function toFiles(value: unknown): FileInfo[] {
@@ -42,12 +42,14 @@ export function isImageField(config: FileConfig): boolean {
 
 /**
  * The order of the field after a choice in the picker: what stays keeps its place, new files
- * come last. The picker lists by folder and knows nothing about the order of a gallery.
+ * come last. The picker lists by folder and knows nothing about the order of a gallery. It
+ * names files by their path, the field by their UUID.
  */
-export function mergeChoice(current: string[], chosen: string[]): string[] {
-  const kept = current.filter((entry) => chosen.includes(entry));
+export function mergeChoice(current: FileInfo[], chosen: string[]): string[] {
+  const known = (entry: string): FileInfo | undefined => current.find(({ uuid, path }) => uuid === entry || path === entry);
+  const kept = current.filter((file) => chosen.some((entry) => known(entry) === file)).map(({ uuid }) => uuid);
 
-  return [...kept, ...chosen.filter((entry) => !kept.includes(entry))];
+  return [...kept, ...chosen.filter((entry) => !known(entry))];
 }
 
 /** Contao's picker for files, with the restrictions of the field. */
@@ -182,7 +184,7 @@ export function createFileField(options: {
         return;
       }
 
-      const order = config.multiple ? mergeChoice(ids(), chosen) : chosen.slice(0, 1);
+      const order = config.multiple ? mergeChoice(files, chosen) : chosen.slice(0, 1).map((entry) => files.find(({ path }) => path === entry)?.uuid ?? entry);
       // Known files keep their preview until the server describes the new ones
       save(order.map((entry) => files.find(({ uuid, path }) => uuid === entry || path === entry) ?? toFiles([entry])[0]));
     });
