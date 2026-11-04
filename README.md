@@ -6,6 +6,10 @@ Redakteure klicken ein Element in der Live-Vorschau an und bearbeiten es sofort,
 über das Backend-Formular. Alle Inhalte bleiben ganz normale Contao-Inhaltselemente: Templates, Insert-Tags, Versionierung,
 Benutzerrechte und Elemente anderer Erweiterungen funktionieren wie gewohnt.
 
+[![Der Contao Block Editor im Einsatz: Text direkt auf der Seite bearbeiten](https://github.com/user-attachments/assets/7fe6098f-8a5a-4ffe-93db-ccc7df2205fb)](https://github.com/user-attachments/assets/01e456d4-e2e5-4be5-8863-aef37f932322)
+
+*Klick auf das Bild öffnet das Video (1 Minute).*
+
 **Highlights**
 - Inline-Bearbeitung direkt im Frontend-Rendering
 - Sofortiger Wechsel vom Klick zum Editieren, ohne Server-Roundtrip
