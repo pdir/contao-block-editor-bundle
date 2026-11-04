@@ -15,7 +15,7 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 final class FieldPolicy
 {
-    private const SUPPORTED_INPUT_TYPES = ['text', 'textarea', 'select', 'checkbox', 'radio', 'inputUnit', 'tableWizard', 'listWizard'];
+    private const SUPPORTED_INPUT_TYPES = ['text', 'textarea', 'select', 'checkbox', 'radio', 'inputUnit', 'tableWizard', 'listWizard', 'fileTree', 'imageSize'];
 
     /** Columns that define a record's identity, position or type. */
     private const PROTECTED_FIELDS = ['id', 'pid', 'ptable', 'sorting', 'tstamp', 'type'];

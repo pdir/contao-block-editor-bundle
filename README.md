@@ -41,6 +41,9 @@ Tabellen werden Zelle für Zelle in der Seite bearbeitet: Tab springt zur nächs
 fügt Zeilen und Spalten ein oder löscht sie. Zellen mit HTML und alle Zellen per Tastatur bearbeitet der Inspector.
 Aufzählungen ebenso Eintrag für Eintrag: Enter legt darunter einen neuen Eintrag an, Rücktaste in einem leeren Eintrag
 entfernt ihn. Einträge mit HTML bearbeitet der Inspector.
+Ein Klick auf ein Bild bietet an, es auszutauschen: Es öffnet sich der Dateiwähler von Contao mit den Dateitypen, die
+das Feld erlaubt. Im Inspector stehen die Dateien eines Elements mit Vorschau, bei Galerien in ihrer Reihenfolge, dazu die
+Bildgröße.
 „Löschen“ im Inspector entfernt das gewählte Element samt verschachtelter Elemente, wenn der Benutzer es löschen darf.
 Wie im Backend landet es in „Wiederherstellen“; direkt danach holt „Rückgängig“ in der Kopfzeile es zurück.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu
@@ -50,7 +53,7 @@ wenn gerade kein Text bearbeitet wird, und lassen sich für Screenreader abschal
 Strg/⌘ + Umschalt + Komma für den Inspector. Kombinationen der Browser und Tasten, die Zeichen erzeugen (⌥ auf dem Mac,
 AltGr unter Windows), bleiben unberührt.
 
-Noch offen: Kopieren, globales Undo/Redo, Datei- und Linkpicker, Patterns, Sprachwechsel,
+Noch offen: Kopieren, globales Undo/Redo, Patterns, Sprachwechsel,
 Responsive-Vorschau und die Erweiterungs-API. Felder, die der Editor noch nicht unterstützt, bleiben über den Link
 „Im klassischen Backend bearbeiten“ erreichbar.
 

@@ -35,6 +35,8 @@ final class FieldPolicyTest extends TestCase
 
         yield 'table' => ['tableitems', ['inputType' => 'tableWizard', 'sql' => 'blob', 'eval' => ['multiple' => true, 'allowHtml' => true]], true];
         yield 'list' => ['listitems', ['inputType' => 'listWizard', 'sql' => 'blob', 'eval' => ['multiple' => true, 'allowHtml' => true]], true];
+        yield 'image' => ['singleSRC', ['inputType' => 'fileTree', 'sql' => ['type' => 'binary', 'length' => 16], 'eval' => ['filesOnly' => true, 'fieldType' => 'radio']], true];
+        yield 'image size' => ['size', ['inputType' => 'imageSize', 'sql' => ['type' => 'string', 'length' => 255], 'eval' => ['rgxp' => 'natural']], true];
         yield 'unfiltered html' => ['unfilteredHtml', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['preserveTags' => true]], false];
         yield 'code editor' => ['code', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['rte' => 'ace|html']], false];
         yield 'raw request data' => ['raw', [...$text, 'eval' => ['useRawRequestData' => true]], false];

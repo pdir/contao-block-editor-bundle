@@ -5,8 +5,8 @@ import type { Shortcut } from './shortcuts';
 export interface InlineConfig {
   field: string;
   selector: string | null;
-  /** A table or a list: each cell or item is edited where it is shown. */
-  mode: 'rich' | 'plain' | 'table' | 'list';
+  /** A table or a list: each cell or item is edited where it is shown. A file: the image is replaced. */
+  mode: 'rich' | 'plain' | 'table' | 'list' | 'file';
   /** The headline of the accordion section around the element, which is outside of its root. */
   section?: boolean;
   /** Found in the page by its text. A plain value is a string then, not a text with a unit. */
@@ -83,6 +83,8 @@ export type ToShell =
   /** A new element after this one. */
   | { type: 'cbe:insert'; id: number }
   | { type: 'cbe:pick-link'; id: number; value: string }
+  /** Another file for the field, chosen in the shell. */
+  | { type: 'cbe:pick-file'; id: number; field: string }
   | { type: 'cbe:nav-links'; urls: string[] }
   | { type: 'cbe:page-select'; id: number }
   | { type: 'cbe:page-change'; id: number; title: string }

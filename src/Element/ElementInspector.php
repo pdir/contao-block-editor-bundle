@@ -15,6 +15,7 @@ use Contao\System;
 use Contao\Widget;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
+use Pdir\ContaoBlockEditorBundle\DataContainer\CallbackInvoker;
 use Pdir\ContaoBlockEditorBundle\DataContainer\EditorDataContainer;
 use Pdir\ContaoBlockEditorBundle\Security\FieldPolicy;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -63,7 +64,31 @@ final class ElementInspector
         private readonly Security $security,
         private readonly FieldPolicy $fieldPolicy,
         private readonly RouterInterface $router,
+        private readonly FileReferences|null $files = null,
     ) {
+    }
+
+    /**
+     * The configuration of a field after its load callbacks, which adjust it to the record: the
+     * core allows other file types for the image of a text than for a download, for example.
+     * The global DCA stays as it was, so one record does not affect the next.
+     *
+     * @return array<string, mixed>
+     */
+    public static function configForRecord(string $table, string $field, EditorDataContainer $dc, mixed $value = null): array
+    {
+        $original = $GLOBALS['TL_DCA'][$table]['fields'][$field];
+
+        try {
+            $dc->setField($field);
+            CallbackInvoker::invokeAll($original['load_callback'] ?? null, $value, $dc);
+
+            return $GLOBALS['TL_DCA'][$table]['fields'][$field];
+        } catch (\Throwable) {
+            return $original;
+        } finally {
+            $GLOBALS['TL_DCA'][$table]['fields'][$field] = $original;
+        }
     }
 
     /**
@@ -325,6 +350,53 @@ final class ElementInspector
         $system->loadLanguageFile(self::TABLE);
     }
 
+    /**
+     * Options with groups, as the image size widget gets them: the sizes of each theme, then the
+     * resize modes.
+     *
+     * @return list<array{label: string, options: list<array{value: string, label: string}>}>
+     */
+    private static function optionGroups(mixed $options): array
+    {
+        $groups = [];
+        $loose = [];
+        $option = static fn (array $option): array => ['value' => (string) ($option['value'] ?? ''), 'label' => (string) ($option['label'] ?? '')];
+
+        foreach (\is_array($options) ? $options : [] as $key => $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+
+            if (\array_key_exists('value', $entry)) {
+                $loose[] = $option($entry);
+            } else {
+                $groups[] = ['label' => (string) $key, 'options' => array_values(array_map($option, array_filter($entry, \is_array(...))))];
+            }
+        }
+
+        return $loose ? [['label' => '', 'options' => $loose], ...$groups] : $groups;
+    }
+
+    /**
+     * Allowed file types as a list; the core also names a container parameter here.
+     *
+     * @return list<string>
+     */
+    private static function extensions(mixed $extensions): array
+    {
+        if (\is_string($extensions) && 1 === preg_match('/^%([^%]+)%$/', $extensions, $matches)) {
+            try {
+                $extensions = System::getContainer()->getParameter($matches[1]);
+            } catch (\Throwable) {
+                return [];
+            }
+        }
+
+        $list = \is_array($extensions) ? $extensions : explode(',', (string) $extensions);
+
+        return array_values(array_filter(array_map(static fn (mixed $extension): string => strtolower(trim((string) $extension)), $list)));
+    }
+
     private function toClientValue(string $field, mixed $value): mixed
     {
         $config = $GLOBALS['TL_DCA'][self::TABLE]['fields'][$field];
@@ -340,6 +412,17 @@ final class ElementInspector
                 static fn (mixed $row): array => array_values(array_map(static fn (mixed $cell): string => \is_scalar($cell) ? (string) $cell : '', \is_array($row) ? $row : [$row])),
                 $value,
             )) : [];
+        }
+
+        // The files with their names and previews: the record only holds binary UUIDs
+        if ('fileTree' === ($config['inputType'] ?? null)) {
+            return $this->files?->describe($value) ?? [];
+        }
+
+        if ('imageSize' === ($config['inputType'] ?? null)) {
+            $value = \is_array($value) ? $value : [];
+
+            return [(string) ($value[0] ?? ''), (string) ($value[1] ?? ''), (string) ($value[2] ?? '')];
         }
 
         if ('listWizard' === ($config['inputType'] ?? null)) {
@@ -364,8 +447,25 @@ final class ElementInspector
         }
 
         $eval = $config['eval'] ?? [];
+        $definition = [];
 
-        return [
+        if ('fileTree' === $config['inputType']) {
+            $eval = self::configForRecord(self::TABLE, $field, $dc)['eval'] ?? [];
+            $definition['files'] = [
+                'multiple' => !empty($eval['multiple']),
+                'filesOnly' => !empty($eval['filesOnly']),
+                'folders' => false === ($eval['files'] ?? null) || (empty($eval['filesOnly']) && empty($eval['files'])),
+                'extensions' => self::extensions($eval['extensions'] ?? ''),
+                'path' => (string) ($eval['path'] ?? ''),
+                'sortable' => !empty($eval['isSortable']),
+            ];
+        }
+
+        if ('imageSize' === $config['inputType']) {
+            $definition['sizes'] = self::optionGroups($attributes['options'] ?? []);
+        }
+
+        return $definition + [
             'name' => $field,
             'label' => (string) $attributes['label'],
             'description' => (string) ($attributes['description'] ?? ''),

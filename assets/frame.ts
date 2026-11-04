@@ -138,6 +138,12 @@ function chooseInline(element: FrameElement, root: HTMLElement, hit: EventTarget
     return table;
   }
 
+  const file = element.inline.find(({ mode }) => mode === 'file');
+
+  if (file && hit instanceof Element && hit.closest('img, picture, video') && root.contains(hit)) {
+    return file;
+  }
+
   const list = element.inline.find(({ mode }) => mode === 'list');
   const item = hit instanceof Element ? hit.closest('li') : null;
 
@@ -436,6 +442,46 @@ function dataRow(table: HTMLTableElement, row: HTMLTableRowElement, rows: Rows):
   const matched = matchRows(body.map((tr) => Array.from(tr.cells, (cell) => cell.textContent ?? '')), rows.slice(head, rows.length - foot).map(textOf));
 
   return head + (matched[at - head] ?? at - head);
+}
+
+/** A click on an image: the bar offers another one, which the shell lets the user choose. */
+function startFile(element: FrameElement, inline: InlineConfig, event: PointerEvent | null): boolean {
+  const image = event?.target instanceof Element ? event.target.closest<HTMLElement>('img, picture, video') : null;
+
+  if (!image) {
+    return false;
+  }
+
+  const many = Array.isArray(element.values[inline.field]) && (element.values[inline.field] as unknown[]).length > 1;
+  const title = many ? 'Bilder auswählen' : 'Bild austauschen';
+  const button = document.createElement('button');
+
+  button.type = 'button';
+  button.title = title;
+  button.setAttribute('aria-label', title);
+  button.append(iconElement(document, ICONS.image));
+  button.addEventListener('pointerdown', (down) => down.preventDefault());
+  button.addEventListener('click', () => {
+    endSession();
+    toShell({ type: 'cbe:pick-file', id: element.id, field: inline.field });
+  });
+
+  formatBar.setAttribute('role', 'toolbar');
+  formatBar.setAttribute('aria-label', 'Bild');
+  formatBar.replaceChildren(button);
+  formatBar.hidden = false;
+
+  session = {
+    ...snapshot(element, inline, image),
+    cleanup() {},
+    showValue() {},
+    barAnchor: image,
+  };
+
+  placeFormatBar();
+
+  // The caret stays where it was: nothing to type here
+  return false;
 }
 
 /** The clicked item, or the first one for the keyboard. */
@@ -743,7 +789,7 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
   let caretPlaced = false;
 
   if (inline) {
-    caretPlaced = inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'list' ? startList(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
+    caretPlaced = inline.mode === 'file' ? startFile(element, inline, event) : inline.mode === 'table' ? startTable(element, inline, root, event) : inline.mode === 'list' ? startList(element, inline, root, event) : inline.mode === 'rich' ? startRich(element, inline, root, event) : startPlain(element, inline, root, event);
   }
 
   if (session) {
@@ -1272,9 +1318,11 @@ document.addEventListener('pointerdown', (event) => {
   }
 
   const link = linkIn(event.target);
+  // An image that opens a larger version is chosen anew rather than followed
+  const onImage = event.target instanceof Element && event.target.closest('img, picture, video') && known.get(hit.id)?.inline.some(({ mode }) => mode === 'file');
 
   // A link is both a way to another page and a part of the text, so the user decides
-  if (link && hit.root.contains(link)) {
+  if (link && hit.root.contains(link) && !onImage) {
     showLinkActions(link, hit.id, hit.root, false);
     placeHandle();
 
@@ -1566,7 +1614,7 @@ function applyValue(id: number, field: string, value: unknown, force: boolean): 
   }
 
   // Only the server knows how the cells and items look: a rejected change is rendered by it again
-  if (inline.mode === 'table' || inline.mode === 'list') {
+  if (inline.mode === 'table' || inline.mode === 'list' || inline.mode === 'file') {
     if (force) {
       void refresh(id);
     }

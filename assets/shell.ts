@@ -13,7 +13,7 @@ interface FieldSchema {
   name: string;
   label: string;
   description: string;
-  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard';
+  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard' | 'fileTree' | 'imageSize';
   rich: boolean;
   multiple: boolean;
   mandatory: boolean;
@@ -21,6 +21,10 @@ interface FieldSchema {
   size: number;
   options: { value: string; label: string }[];
   unitOptions: string[];
+  /** Which files the file tree takes. */
+  files?: import('./media-field').FileConfig;
+  /** The sizes of the themes and the resize modes, in groups. */
+  sizes?: { label: string; options: { value: string; label: string }[] }[];
 }
 
 interface TypeSchema {
@@ -50,7 +54,7 @@ const title = document.getElementById('cbe-title') as HTMLElement;
 const back = document.getElementById('cbe-back') as HTMLButtonElement;
 const undoButton = document.getElementById('cbe-undo') as HTMLButtonElement;
 
-const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl, undo: undoUrl, tableField: tableFieldUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter' | 'undo' | 'tableField', string>;
+const { token, api, schema: schemaUrl, base, preview, backend, picker: pickerUrl, richEditor: richEditorUrl, previewMenu: previewMenuUrl, pages: pagesUrl, navPages: navPagesUrl, records: recordsUrl, readerRecord: readerRecordUrl, inserter: inserterUrl, undo: undoUrl, tableField: tableFieldUrl, mediaField: mediaFieldUrl } = app.dataset as Record<'token' | 'api' | 'schema' | 'base' | 'preview' | 'backend' | 'picker' | 'richEditor' | 'previewMenu' | 'pages' | 'navPages' | 'records' | 'readerRecord' | 'inserter' | 'undo' | 'tableField' | 'mediaField', string>;
 const framePaths: FramePaths = { base, preview };
 /** The back end and internal routes such as the logout are no pages of the website. */
 const blockedPaths = [backend, `${base}/_contao`];
@@ -109,9 +113,12 @@ function inlineOf(element: Element): InlineConfig[] {
   const riches: InlineConfig[] = (schema[element.type]?.fields ?? [])
     .filter(({ name, input, rich }) => input === 'textarea' && rich && name in element.values && !inline.some(({ field }) => field === name))
     .map(({ name }) => ({ field: name, selector: null, mode: 'rich', scalar: true }));
+  // The first field showing an image: a click on the image chooses another one
+  const image = (schema[element.type]?.fields ?? []).find(({ name, input }) => input === 'fileTree' && Array.isArray(element.values[name]) && (element.values[name] as { image?: boolean }[]).some((file) => file?.image));
+  const files: InlineConfig[] = image ? [{ field: image.name, selector: null, mode: 'file' }] : [];
   const section: InlineConfig[] = hasSection(element) ? [{ field: 'sectionHeadline', selector: null, mode: 'plain', section: true }] : [];
 
-  return [...inline, ...texts, ...riches, ...section];
+  return [...inline, ...texts, ...riches, ...files, ...section];
 }
 
 function fieldsOf(element: Element): FieldSchema[] {
@@ -203,6 +210,15 @@ const queue = new SaveQueue(send, {
 
     element.values = { ...element.values, ...values };
     status.classList.remove('is-error');
+
+    // Files come back with their names and previews
+    if (selected === id) {
+      for (const { name, input } of fieldsOf(element)) {
+        if ((input === 'fileTree' || input === 'imageSize') && name in values) {
+          fieldSync.get(name)?.(values[name]);
+        }
+      }
+    }
 
     // Inspector changes can affect the rendering (e.g. the headline level), as can insert tags
     const needsRender = changedFields.length > 0 || Object.keys(sent).some((field) => !typedInPage.has(`${id}:${field}`) || JSON.stringify(sent[field]).includes('{{'));
@@ -637,6 +653,7 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
 
 /** Loaded with the first table. */
 let tableField: Promise<typeof import('./table-field')> | null = null;
+let mediaField: Promise<typeof import('./media-field')> | null = null;
 
 function createField(element: Element, field: FieldSchema): HTMLElement {
   const wrapper = document.createElement('div');
@@ -686,6 +703,26 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
 
         holder.append(table.root);
         fieldSync.set(field.name, (next) => table.sync(next));
+      }).catch((error: unknown) => console.error('[block-editor] Das Feld fehlt:', error));
+      control = holder;
+      break;
+    }
+    case 'fileTree':
+    case 'imageSize': {
+      const holder = document.createElement('div');
+
+      mediaField ??= import(mediaFieldUrl) as Promise<typeof import('./media-field')>;
+      mediaField.then(({ createFileField, createSizeField, filePickerUrl }) => {
+        if (!holder.isConnected) {
+          return;
+        }
+
+        const media = field.input === 'fileTree' && field.files
+          ? createFileField({ label: field.label, value: element.values[field.name], config: field.files, mandatory: field.mandatory, pick: (current, done) => openFilePicker(element.id, field, current, done, filePickerUrl), change })
+          : createSizeField({ id, label: field.label, value: element.values[field.name], groups: field.sizes ?? [], change: (next) => change(next) });
+
+        holder.append(media.root);
+        fieldSync.set(field.name, (next) => media.sync(next));
       }).catch((error: unknown) => console.error('[block-editor] Das Feld fehlt:', error));
       control = holder;
       break;
@@ -1103,6 +1140,29 @@ window.addEventListener('message', (event) => {
     case 'cbe:pick-link':
       openPicker(message.id, message.value);
       break;
+    case 'cbe:pick-file': {
+      const element = elements.get(message.id);
+      const field = element && fieldsOf(element).find(({ name }) => name === message.field);
+
+      if (element && field?.files) {
+        const config = field.files;
+        const current = (element.values[field.name] as { uuid?: string }[] | undefined ?? []).map((file) => String(file?.uuid ?? file));
+
+        mediaField ??= import(mediaFieldUrl) as Promise<typeof import('./media-field')>;
+        void mediaField.then(({ mergeChoice, filePickerUrl }) => openFilePicker(element.id, field, current, (chosen) => {
+          if (!chosen.length && field.mandatory) {
+            return;
+          }
+
+          const value = config.multiple ? mergeChoice(current, chosen) : chosen[0] ?? '';
+
+          element.values[field.name] = value;
+          typedInPage.delete(`${element.id}:${field.name}`);
+          queue.change(element.id, field.name, value);
+        }, filePickerUrl));
+      }
+      break;
+    }
     case 'cbe:move': {
       const { id, target, position } = message;
 
@@ -1459,6 +1519,8 @@ renderInspector();
 const pickerDialog = document.getElementById('cbe-picker') as HTMLDialogElement;
 const pickerFrame = pickerDialog.querySelector('iframe') as HTMLIFrameElement;
 let pickerChoice: string | null = null;
+let pickerMultiple = false;
+const pickerTitle = pickerDialog.querySelector('h2') as HTMLElement;
 let pickerDone: (value: string | null) => void = () => {};
 
 /** Without a callback, the choice goes to the text being edited in the page. */
@@ -1478,10 +1540,39 @@ function openPicker(id: number, value: string, done: (value: string | null) => v
   pickerDialog.showModal();
 }
 
+/** Contao's picker for files, with the restrictions of the field. Gets the chosen paths. */
+function openFilePicker(id: number, field: FieldSchema, current: string[], done: (chosen: string[]) => void, filePickerUrl: typeof import('./media-field').filePickerUrl): void {
+  const config = field.files;
+
+  if (!config) {
+    return;
+  }
+
+  pickerTitle.textContent = field.label;
+  pickerDone = (choice) => {
+    pickerTitle.textContent = 'Link auswählen';
+
+    if (choice !== null) {
+      done(choice ? choice.split('\n') : []);
+    }
+  };
+  pickerMultiple = config.multiple;
+  pickerChoice = null;
+  pickerApply.disabled = false;
+  pickerFrame.src = filePickerUrl(pickerUrl, id, config, current);
+  pickerDialog.showModal();
+}
+
 /** Read like Contao's own modal does: the checked entry of the listing in the frame. */
 function readPickerChoice(): string | null {
   const listing = pickerFrame.contentDocument?.querySelector<HTMLElement>('#tl_listing, #tl_select');
-  const checked = listing?.querySelector<HTMLInputElement>('input:checked:not([id^="check_all_"]):not([id^="reset_"])');
+  const selector = 'input:checked:not([id^="check_all_"]):not([id^="reset_"])';
+  const checked = listing?.querySelector<HTMLInputElement>(selector);
+
+  // Several files: all of them, one per line (paths can hold commas)
+  if (pickerMultiple && listing) {
+    return Array.from(listing.querySelectorAll<HTMLInputElement>(selector), ({ value }) => value).join('\n');
+  }
 
   if (checked) {
     return checked.value;
@@ -1528,6 +1619,7 @@ pickerFrame.addEventListener('load', () => {
 
 // Also closed with Esc: the frame always hears back, so it doesn't wait for a choice
 pickerDialog.addEventListener('close', () => {
+  pickerMultiple = false;
   pickerDone(pickerChoice);
   pickerDone = () => {};
   pickerFrame.src = 'about:blank';

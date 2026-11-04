@@ -49,6 +49,22 @@ final class RecordWriterTest extends TestCase
         yield 'too many items' => [array_fill(0, 501, 'a'), false];
     }
 
+    #[DataProvider('imageSizes')]
+    public function testAcceptsOnlyThreePartsAsImageSize(mixed $value, bool $expected): void
+    {
+        $this->assertSame($expected, RecordWriter::isImageSize($value));
+    }
+
+    public static function imageSizes(): iterable
+    {
+        yield 'size of a theme' => [['', '', '12'], true];
+        yield 'own dimensions' => [['800', '', 'proportional'], true];
+        yield 'two parts' => [['800', ''], false];
+        yield 'not a list' => [['w' => '1', 'h' => '2', 'm' => 'box'], false];
+        yield 'number' => [[800, '', 'box'], false];
+        yield 'string' => ['box', false];
+    }
+
     public function testListItemsAreEditedInThePage(): void
     {
         $this->assertSame([['field' => 'listitems', 'selector' => 'ul, ol', 'mode' => 'list']], ElementInspector::inlineFields('list', ['listitems', 'listtype']));

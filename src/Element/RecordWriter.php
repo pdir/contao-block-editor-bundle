@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Pdir\ContaoBlockEditorBundle\Element;
 
 use Contao\CoreBundle\Exception\ResponseException;
+use Contao\StringUtil;
 use Contao\System;
 use Contao\Widget;
 use Doctrine\DBAL\Exception as DbalException;
@@ -23,8 +24,10 @@ final class RecordWriter
     private const MAX_TABLE_COLUMNS = 50;
     private const MAX_LIST_ITEMS = 500;
 
-    public function __construct(private readonly RequestStack $requestStack)
-    {
+    public function __construct(
+        private readonly RequestStack $requestStack,
+        private readonly FileReferences $files,
+    ) {
     }
 
     /**
@@ -36,9 +39,17 @@ final class RecordWriter
     {
         $config = $GLOBALS['TL_DCA'][$table]['fields'][$field];
 
+        // The file tree widget takes the chosen files as one string of UUIDs. Its load callbacks
+        // set the allowed file types for the record, which the widget checks.
+        if ('fileTree' === $config['inputType']) {
+            $current = StringUtil::deserialize($row[$field] ?? null);
+            $value = implode(',', $this->files->resolve($value, array_values(array_filter(\is_array($current) ? $current : [$current], \is_string(...)))));
+            $config = ElementInspector::configForRecord($table, $field, $dc, $row[$field] ?? null);
+        }
+
         // The shape must match the field: a string would overwrite all parts of a
         // multi-value field such as cssID.
-        $expectsArray = 'inputUnit' === $config['inputType'] || !empty($config['eval']['multiple']);
+        $expectsArray = 'fileTree' !== $config['inputType'] && ('inputUnit' === $config['inputType'] || 'imageSize' === $config['inputType'] || !empty($config['eval']['multiple']));
 
         if (\is_array($value) !== $expectsArray || (!\is_array($value) && !\is_scalar($value))) {
             throw new ApiException(400, 'Ungültiger Wert.');
@@ -46,6 +57,10 @@ final class RecordWriter
 
         if ('tableWizard' === $config['inputType'] && !self::isTable($value)) {
             throw new ApiException(400, 'Ungültige Tabelle.');
+        }
+
+        if ('imageSize' === $config['inputType'] && !self::isImageSize($value)) {
+            throw new ApiException(400, 'Ungültige Bildgröße.');
         }
 
         if ('listWizard' === $config['inputType'] && !self::isList($value)) {
@@ -136,6 +151,15 @@ final class RecordWriter
         }
 
         return true;
+    }
+
+    /**
+     * Width, height and the size or resize mode, as the image size widget sends them.
+     */
+    public static function isImageSize(mixed $value): bool
+    {
+        return \is_array($value) && array_is_list($value) && 3 === \count($value)
+            && array_reduce($value, static fn (bool $valid, mixed $part): bool => $valid && \is_string($part) && \strlen($part) <= 64, true);
     }
 
     /**

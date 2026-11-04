@@ -13,7 +13,7 @@ final class EditorAssets
 {
     private const SOURCE_DIR = __DIR__.'/../../public/';
     private const PUBLIC_DIR = '/bundles/contaoblockeditor/';
-    public const FILES = ['shell.js', 'shell.css', 'frame.js', 'frame.css', 'rich-editor.js', 'restore-settings.js', 'preview-menu.js', 'nav-pages.js', 'reader-record.js', 'inserter.js', 'table-field.js', 'rich-text.js'];
+    public const FILES = ['shell.js', 'shell.css', 'frame.js', 'frame.css', 'rich-editor.js', 'restore-settings.js', 'preview-menu.js', 'nav-pages.js', 'reader-record.js', 'inserter.js', 'table-field.js', 'rich-text.js', 'media-field.js'];
 
     /** @var array<string, string> */
     private array $versions = [];
