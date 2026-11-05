@@ -126,7 +126,9 @@ function inlineTarget(inline: InlineConfig, root: HTMLElement, shown?: unknown):
   const scope = inline.scalar || !base ? root : base;
   const accepts = (candidate: HTMLElement): boolean => candidate.closest(`[${ID_ATTRIBUTE}]`) === root && !richTargets.some((target) => target?.contains(candidate));
 
-  return findByText(scope, plainText(value), accepts) ?? wrapTextRun(scope, plainText(value), accepts);
+  return findByText(scope, plainText(value), accepts)
+    ?? (inline.multiline ? findByText(scope, plainText(value), accepts, true) : null)
+    ?? wrapTextRun(scope, plainText(value), accepts);
 }
 
 /** The part under the pointer, otherwise the element's main text. */
@@ -396,11 +398,21 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
   };
 
   const onKeydown = (event: KeyboardEvent): void => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      endSession();
+    // In a text area the browser breaks the line itself: with the white space kept, as text
+    if (event.key !== 'Enter' || (inline.multiline && event.shiftKey)) {
+      return;
     }
+
+    event.preventDefault();
+    endSession();
   };
+
+  // Line breaks of a text area show while it is edited, the template decides about them later
+  const whiteSpace = target.style.whiteSpace;
+
+  if (inline.multiline) {
+    target.style.whiteSpace = 'pre-line';
+  }
 
   target.addEventListener('input', onInput);
   target.addEventListener('keydown', onKeydown);
@@ -411,6 +423,7 @@ function startPlain(element: FrameElement, inline: InlineConfig, root: HTMLEleme
       target.removeEventListener('input', onInput);
       target.removeEventListener('keydown', onKeydown);
       target.removeAttribute('contenteditable');
+      target.style.whiteSpace = whiteSpace;
     },
     // The text is in place already, as it was typed
     showValue() {},
@@ -451,6 +464,20 @@ function dataRow(table: HTMLTableElement, row: HTMLTableRowElement, rows: Rows):
  */
 function imageAt(element: FrameElement, root: HTMLElement, event: PointerEvent | null): HTMLElement | null {
   if (!event || !element.inline.some(({ mode }) => mode === 'file')) {
+    return null;
+  }
+
+  // Text over the image, such as the badge of a hero, is edited instead. A link stretched over
+  // a card is not: only its glyphs count, not the area it covers.
+  const onText = element.inline
+    .filter(({ mode }) => mode === 'plain' || mode === 'rich')
+    .some((inline) => {
+      const target = inlineTarget(inline, root);
+
+      return target !== null && target.contains(event.target as Node) && isOnText(target, event.clientX, event.clientY);
+    });
+
+  if (onText) {
     return null;
   }
 
@@ -936,7 +963,7 @@ function endSession(): void {
   session = null;
 
   // Insert tags can only be resolved by the server, and only after the save is through
-  toShell({ type: 'cbe:commit', id: element.id, render: emptied || (hasInsertTag(value) && (changed || showedRaw)) });
+  toShell({ type: 'cbe:commit', id: element.id, render: emptied || (changed && Boolean(inline.multiline)) || (hasInsertTag(value) && (changed || showedRaw)) });
 }
 
 function activate(id: number, root: HTMLElement, event: PointerEvent | null): boolean {

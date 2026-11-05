@@ -108,9 +108,9 @@ function inlineOf(element: Element): InlineConfig[] {
   const inline = schema[element.type]?.inline ?? [];
   // Templates can show any text field, which only the page can tell
   const texts: InlineConfig[] = (schema[element.type]?.fields ?? [])
-    .filter(({ name, input, multiple, size }) => input === 'text' && !multiple && size <= 1 && name in element.values && !inline.some(({ field }) => field === name))
+    .filter(({ name, input, rich, multiple, size }) => ((input === 'text' && !multiple && size <= 1) || (input === 'textarea' && !rich)) && name in element.values && !inline.some(({ field }) => field === name))
     .filter(({ name }) => element.values[name] === null || typeof element.values[name] === 'string')
-    .map(({ name }) => ({ field: name, selector: null, mode: 'plain', scalar: true }));
+    .map(({ name, input }) => ({ field: name, selector: null, mode: 'plain', scalar: true, ...(input === 'textarea' ? { multiline: true } : {}) }));
   // Rich texts beyond the element's main text, such as those of other bundles
   const riches: InlineConfig[] = (schema[element.type]?.fields ?? [])
     .filter(({ name, input, rich }) => input === 'textarea' && rich && name in element.values && !inline.some(({ field }) => field === name))

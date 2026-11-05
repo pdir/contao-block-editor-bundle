@@ -25,7 +25,7 @@ final class FileReferences
 
     private const PREVIEW_SIZE = [160, 120, 'box'];
 
-    private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'gif', 'png', 'webp', 'avif', 'svg', 'svgz', 'heic', 'jxl'];
+    private const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'gif', 'png', 'webp', 'avif', 'svg', 'svgz', 'heic', 'jxl', 'tif', 'tiff', 'bmp'];
 
     public function __construct(
         private readonly ContaoFramework $framework,

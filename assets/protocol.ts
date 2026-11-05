@@ -11,6 +11,8 @@ export interface InlineConfig {
   section?: boolean;
   /** Found in the page by its text. A plain value is a string then, not a text with a unit. */
   scalar?: boolean;
+  /** A text area without an editor: Shift+Enter starts a new line. */
+  multiline?: boolean;
 }
 
 export interface FrameElement {

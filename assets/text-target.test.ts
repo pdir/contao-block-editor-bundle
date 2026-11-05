@@ -23,6 +23,13 @@ describe('findByText', () => {
     expect(findByText(root, 'Über uns')?.className).toBe('kicker');
   });
 
+  it('finds the lines of a text area joined by tags without spaces when loose', () => {
+    root.insertAdjacentHTML('beforeend', '<p class="lines">Zeile eins<br>Zeile zwei</p>');
+
+    expect(findByText(root, 'Zeile eins\nZeile zwei')).toBeNull();
+    expect(findByText(root, 'Zeile eins\nZeile zwei', undefined, true)?.className).toBe('lines');
+  });
+
   it('finds the element around all of its children', () => {
     expect(findByText(root, 'Nur ein Teil')?.tagName).toBe('H3');
   });
