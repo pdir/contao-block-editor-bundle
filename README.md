@@ -37,6 +37,7 @@ gespeichert.
 Neue Elemente kommen über das Plus unter dem Griff oder den Button „Element darunter einfügen“ im Inspector unter das
 gewählte Element. Zur Wahl stehen die Elementtypen, die der Benutzer an dieser Stelle anlegen darf, auch in verschachtelten
 Elementen; das neue Element erhält die Standardwerte aus dem DCA und öffnet sich gleich zum Schreiben.
+Ein Artikel ohne Elemente zeigt im Editor eine Fläche „Element einfügen“ für das erste Element.
 Tabellen werden Zelle für Zelle in der Seite bearbeitet: Tab springt zur nächsten Zelle, die Leiste über der Tabelle
 fügt Zeilen und Spalten ein oder löscht sie. Zellen mit HTML und alle Zellen per Tastatur bearbeitet der Inspector.
 Aufzählungen ebenso Eintrag für Eintrag: Enter legt darunter einen neuen Eintrag an, Rücktaste in einem leeren Eintrag

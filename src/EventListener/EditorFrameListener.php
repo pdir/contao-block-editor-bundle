@@ -122,7 +122,7 @@ final class EditorFrameListener
         return $origin.$path.'?'.$query.(isset($parts['fragment']) ? '#'.$parts['fragment'] : '');
     }
 
-    private function isEditorRequest(): bool
+    public function isEditorRequest(): bool
     {
         $request = $this->requestStack->getMainRequest();
 

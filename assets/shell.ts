@@ -1,7 +1,7 @@
 import { ICONS, iconElement } from './editor-icons';
 import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
 import type { RichField } from './rich-editor';
-import type { FrameElement, FramePage, FrameRecord, InlineConfig, ToFrame, ToShell, MovePosition } from './protocol';
+import type { FrameElement, FramePage, FrameRecord, InlineConfig, ToFrame, ToShell, MovePosition, InsertPlace } from './protocol';
 import { readMessage } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 import type { NavPages } from './nav-pages';
@@ -85,7 +85,7 @@ let navigation = 0;
 let hasLeftStart = false;
 const awaitingRender = new Set<number>();
 /** New elements by the element they were added after, until the page shows them. */
-const insertedAfter = new Map<number, number>();
+const insertedAt = new Map<number, InsertPlace>();
 /** Fields last changed by typing in the page: the page shows them correctly already. */
 const typedInPage = new Set<string>();
 /** Fields that extensions changed during the current saves, shown once these are done. */
@@ -131,7 +131,7 @@ function fieldsOf(element: Element): FieldSchema[] {
 
 function renderAwaited(): void {
   for (const id of awaitingRender) {
-    post({ type: 'cbe:refresh', id, after: insertedAfter.get(id) });
+    post({ type: 'cbe:refresh', id, ...insertedAt.get(id) });
   }
 
   awaitingRender.clear();
@@ -234,7 +234,7 @@ const queue = new SaveQueue(send, {
     }
 
     if (needsRender) {
-      post({ type: 'cbe:refresh', id, after: insertedAfter.get(id) });
+      post({ type: 'cbe:refresh', id, ...insertedAt.get(id) });
     }
   },
   onFailed(id, sent, error) {
@@ -285,13 +285,16 @@ async function moveElement(id: number, target: number, position: MovePosition): 
 /** Loaded with the first new element. */
 let inserter: Promise<(url: string) => Promise<string | null>> | null = null;
 
-/** Asks for the type, then adds the element after the given one and opens it. */
-async function insertAfter(target: number): Promise<void> {
+/**
+ * Asks for the type, then adds the element after the given one, or into an empty article, and
+ * opens it.
+ */
+async function insertElement(place: { after: number } | { into: number }): Promise<void> {
   const load = currentLoad;
 
   inserter ??= (import(inserterUrl) as Promise<typeof import('./inserter')>).then(({ setupInserter }) => setupInserter(document.getElementById('cbe-inserter') as HTMLDialogElement));
 
-  const type = await (await inserter)(`${api}/${target}/types`);
+  const type = await (await inserter)('after' in place ? `${api}/${place.after}/types` : `${api.replace(/elements$/, 'articles')}/${place.into}/types`);
 
   if (!type || load !== currentLoad) {
     return;
@@ -311,7 +314,7 @@ async function insertAfter(target: number): Promise<void> {
     const response = await fetch(api, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'X-Block-Editor-Token': token },
-      body: JSON.stringify({ target, position: 'after', type }),
+      body: JSON.stringify('after' in place ? { target: place.after, position: 'after', type } : { article: place.into, type }),
     });
 
     const data = (await response.json().catch(() => ({}))) as { error?: string; element?: Element; revisions?: Record<string, string> };
@@ -336,7 +339,7 @@ async function insertAfter(target: number): Promise<void> {
     }
 
     elements.set(element.id, element);
-    insertedAfter.set(element.id, target);
+    insertedAt.set(element.id, place);
 
     if (element.editable) {
       const inline = inlineOf(element);
@@ -345,7 +348,7 @@ async function insertAfter(target: number): Promise<void> {
       post({ type: 'cbe:elements', elements: [{ id: element.id, inline, values: Object.fromEntries(inline.map(({ field }) => [field, element.values[field]])) }] });
     }
 
-    post({ type: 'cbe:refresh', id: element.id, after: target, show: true });
+    post({ type: 'cbe:refresh', id: element.id, ...place, show: true });
     selected = element.id;
     selectedPage = null;
     recordSelected = false;
@@ -396,7 +399,7 @@ async function deleteElement(id: number): Promise<void> {
     for (const gone of data.deleted ?? [id]) {
       elements.delete(gone);
       queue.forget(gone);
-      insertedAfter.delete(gone);
+      insertedAt.delete(gone);
       awaitingRender.delete(gone);
     }
 
@@ -461,7 +464,7 @@ async function restoreElement(undo: number, id: number, label: string): Promise<
 function resetPage(): void {
   elements.clear();
   awaitingRender.clear();
-  insertedAfter.clear();
+  insertedAt.clear();
   typedInPage.clear();
   sideEffects.clear();
   selected = null;
@@ -599,6 +602,8 @@ function showNoEditor(): void {
 async function loadElements(ids: number[], load: number, page: FramePage | null): Promise<void> {
   if (ids.length === 0) {
     setStatus('');
+    // The frame still sets itself up: empty articles offer to add the first element
+    post({ type: 'cbe:elements', elements: [] });
 
     return;
   }
@@ -1038,7 +1043,7 @@ function renderInspector(): void {
   add.type = 'button';
   add.className = 'cbe-button';
   add.textContent = 'Element darunter einfügen';
-  add.addEventListener('click', () => void insertAfter(element.id));
+  add.addEventListener('click', () => void insertElement({ after: element.id }));
   actions.append(add);
 
   // Without asking: it can be undone right away and later in "Wiederherstellen"
@@ -1186,7 +1191,10 @@ window.addEventListener('message', (event) => {
       break;
     }
     case 'cbe:insert':
-      void insertAfter(message.id);
+      void insertElement({ after: message.id });
+      break;
+    case 'cbe:insert-into':
+      void insertElement({ into: message.article });
       break;
     case 'cbe:commit':
       if (message.render) {

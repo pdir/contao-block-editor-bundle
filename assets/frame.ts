@@ -1660,7 +1660,28 @@ function applyElements(elements: FrameElement[]): void {
     }
   }
 
+  prepareArticles(document.body);
   document.documentElement.classList.add('cbe-ready');
+}
+
+/** An article without elements, marked by the server: the first element is added here. */
+function prepareArticles(scope: HTMLElement): void {
+  for (const placeholder of scope.querySelectorAll<HTMLElement>('[data-cbe-article]')) {
+    if (placeholder.childElementCount) {
+      continue;
+    }
+
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.className = 'cbe-empty-article__add';
+    add.textContent = 'Element einfügen';
+    add.addEventListener('click', () => {
+      endSession();
+      toShell({ type: 'cbe:insert-into', article: Number(placeholder.dataset.cbeArticle) });
+    });
+
+    placeholder.append(add);
+  }
 }
 
 function prepareRoot(root: HTMLElement): void {
@@ -1703,6 +1724,37 @@ function placeNew(fresh: HTMLElement, after: number): HTMLElement | null {
   return findElement(Number(fresh.getAttribute(ID_ATTRIBUTE)));
 }
 
+/**
+ * The first element of an article. The article is taken over as the server rendered it now,
+ * found by its ID, as it held nothing else. Without one the element takes the place of the button.
+ */
+function placeInto(fresh: HTMLElement, article: number): HTMLElement | null {
+  const placeholder = document.querySelector<HTMLElement>(`[data-cbe-article="${article}"]`);
+
+  if (!placeholder) {
+    return null;
+  }
+
+  const wrapper = placeholder.parentElement?.closest<HTMLElement>('[id]');
+  const freshWrapper = wrapper ? fresh.ownerDocument.getElementById(wrapper.id) : null;
+
+  if (wrapper && freshWrapper?.contains(fresh) && !wrapper.querySelector(`[${ID_ATTRIBUTE}]`)) {
+    const replacement = document.importNode(freshWrapper, true);
+
+    wrapper.replaceWith(replacement);
+
+    for (const root of replacement.querySelectorAll<HTMLElement>(`[${ID_ATTRIBUTE}]`)) {
+      if (known.has(Number(root.getAttribute(ID_ATTRIBUTE)))) {
+        prepareRoot(root);
+      }
+    }
+  } else {
+    placeholder.replaceWith(document.importNode(fresh, true));
+  }
+
+  return findElement(Number(fresh.getAttribute(ID_ATTRIBUTE)));
+}
+
 /** Brings a new element into view and opens its main text. */
 function showNew(id: number, root: HTMLElement): void {
   root.scrollIntoView({ block: 'center', behavior: 'instant' });
@@ -1732,7 +1784,7 @@ function removeElement(id: number): void {
   placeHandle();
 }
 
-async function refresh(id: number, after?: number, show = false): Promise<void> {
+async function refresh(id: number, after?: number, show = false, into?: number): Promise<void> {
   if (session?.element.id === id) {
     return;
   }
@@ -1762,9 +1814,9 @@ async function refresh(id: number, after?: number, show = false): Promise<void> 
     if (freshHeadline) {
       sectionButton(replacement)?.replaceChildren(...Array.from(freshHeadline.childNodes, (node) => document.importNode(node, true)));
     }
-  } else if (fresh && after) {
+  } else if (fresh && (after || into)) {
     // An element without content may render nothing yet: it shows up with its first save
-    const root = placeNew(fresh, after);
+    const root = after ? placeNew(fresh, after) : placeInto(fresh, into as number);
 
     if (root) {
       prepareRoot(root);
@@ -1842,7 +1894,7 @@ window.addEventListener('message', (event) => {
       applyValue(message.id, message.field, message.value, true);
       break;
     case 'cbe:refresh':
-      void refresh(message.id, message.after, message.show);
+      void refresh(message.id, message.after, message.show, message.into);
       break;
     case 'cbe:nav-edit':
       nav?.enable(message.enabled);

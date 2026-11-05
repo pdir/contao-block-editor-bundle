@@ -16,7 +16,7 @@ use Psr\Log\LoggerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
- * Adds a new element next to an existing one. It follows DC_Table::create(): the default
+ * Adds a new element next to an existing one, or to an empty article. It follows DC_Table::create(): the default
  * values of the DCA, the voters decide on the type in this place (including the nesting
  * rules), then the oncreate callbacks run. Like the back end, only the types the voters
  * allow in this place are offered.
@@ -46,12 +46,36 @@ final class ElementCreator
     {
         $this->inspector->loadDca();
 
-        $target = $this->connection->fetchAssociative('SELECT * FROM tl_content WHERE id = ?', [$targetId]);
+        return $this->typesIn($this->besideElement($targetId));
+    }
 
-        if (false === $target || !\in_array($target['ptable'], ElementInspector::supportedPtables(), true) || !$this->isGranted(new ReadAction(self::TABLE, $target))) {
-            throw new ApiException(404, 'Das Element wurde nicht gefunden.');
-        }
+    /**
+     * The types that can be added to an article without elements.
+     *
+     * @return list<array{label: string, types: list<array{type: string, label: string}>}>
+     */
+    public function typesInArticle(int $articleId): array
+    {
+        $this->inspector->loadDca();
 
+        return $this->typesIn($this->inArticle($articleId));
+    }
+
+    /**
+     * Whether the user may add anything to the article at all: only then does the editor offer it.
+     */
+    public function canAddToArticle(int $articleId): bool
+    {
+        return $this->isGranted(new CreateAction(self::TABLE, ['pid' => $articleId, 'ptable' => 'tl_article']));
+    }
+
+    /**
+     * @param array{pid: int, ptable: string} $target
+     *
+     * @return list<array{label: string, types: list<array{type: string, label: string}>}>
+     */
+    private function typesIn(array $target): array
+    {
         $groups = [];
 
         foreach ($GLOBALS['TL_CTE'] ?? [] as $group => $types) {
@@ -64,7 +88,7 @@ final class ElementCreator
             foreach (array_keys($types) as $type) {
                 $type = (string) $type;
 
-                if (isset($GLOBALS['TL_DCA'][self::TABLE]['palettes'][$type]) && $this->isGranted(new CreateAction(self::TABLE, ['pid' => (int) $target['pid'], 'ptable' => $target['ptable'], 'type' => $type]))) {
+                if (isset($GLOBALS['TL_DCA'][self::TABLE]['palettes'][$type]) && $this->isGranted(new CreateAction(self::TABLE, ['pid' => $target['pid'], 'ptable' => $target['ptable'], 'type' => $type]))) {
                     $allowed[] = ['type' => $type, 'label' => ElementInspector::typeLabel($type)];
                 }
             }
@@ -83,11 +107,31 @@ final class ElementCreator
      */
     public function create(int $targetId, string $position, string $type): array
     {
+        return $this->transactional(fn (): array => $this->doCreate($this->besideElement($targetId, true), $targetId, $position, $type));
+    }
+
+    /**
+     * Adds the element at the end of an article, which has none so far as a rule.
+     *
+     * @return array{element: array<string, mixed>, revisions: array<int, string>}
+     */
+    public function createInArticle(int $articleId, string $type): array
+    {
+        return $this->transactional(fn (): array => $this->doCreate($this->inArticle($articleId, true), null, 'after', $type));
+    }
+
+    /**
+     * @param \Closure(): array{element: array<string, mixed>, revisions: array<int, string>} $create
+     *
+     * @return array{element: array<string, mixed>, revisions: array<int, string>}
+     */
+    private function transactional(\Closure $create): array
+    {
         $this->inspector->loadDca();
         $this->connection->beginTransaction();
 
         try {
-            $result = $this->doCreate($targetId, $position, $type);
+            $result = $create();
             $this->connection->commit();
         } catch (\Throwable $exception) {
             $this->connection->rollBack();
@@ -99,22 +143,18 @@ final class ElementCreator
     }
 
     /**
+     * @param array{pid: int, ptable: string} $target the parent of the new element
+     *
      * @return array{element: array<string, mixed>, revisions: array<int, string>}
      */
-    private function doCreate(int $targetId, string $position, string $type): array
+    private function doCreate(array $target, int|null $targetId, string $position, string $type): array
     {
-        $target = $this->connection->fetchAssociative('SELECT * FROM tl_content WHERE id = ? FOR UPDATE', [$targetId]);
-
-        if (false === $target || !\in_array($target['ptable'], ElementInspector::supportedPtables(), true) || !$this->isGranted(new ReadAction(self::TABLE, $target))) {
-            throw new ApiException(404, 'Das Element wurde nicht gefunden.');
-        }
-
         if (!isset($GLOBALS['TL_DCA'][self::TABLE]['palettes'][$type]) || ($GLOBALS['TL_DCA'][self::TABLE]['config']['notCreatable'] ?? false)) {
             throw new ApiException(422, 'Dieses Element kann hier nicht eingefügt werden.');
         }
 
-        $pid = (int) $target['pid'];
-        $ptable = (string) $target['ptable'];
+        $pid = $target['pid'];
+        $ptable = $target['ptable'];
 
         /** @var array<int, int> $siblings */
         $siblings = array_map(intval(...), $this->connection->fetchAllKeyValue(
@@ -123,7 +163,8 @@ final class ElementCreator
         ));
 
         $ids = array_keys($siblings);
-        $index = (int) array_search($targetId, $ids, true) + ('after' === $position ? 1 : 0);
+        // Next to the element, or at the end of the article
+        $index = null === $targetId ? \count($ids) : (int) array_search($targetId, $ids, true) + ('after' === $position ? 1 : 0);
         $sorting = ElementMover::sortingAt(array_values($siblings), $index);
         $renumber = null === $sorting;
 
@@ -182,9 +223,39 @@ final class ElementCreator
     }
 
     /**
+     * The parent of the element next to which a new one goes.
+     *
+     * @return array{pid: int, ptable: string}
+     */
+    private function besideElement(int $targetId, bool $lock = false): array
+    {
+        $target = $this->connection->fetchAssociative('SELECT * FROM tl_content WHERE id = ?'.($lock ? ' FOR UPDATE' : ''), [$targetId]);
+
+        if (false === $target || !\in_array($target['ptable'], ElementInspector::supportedPtables(), true) || !$this->isGranted(new ReadAction(self::TABLE, $target))) {
+            throw new ApiException(404, 'Das Element wurde nicht gefunden.');
+        }
+
+        return ['pid' => (int) $target['pid'], 'ptable' => (string) $target['ptable']];
+    }
+
+    /**
+     * @return array{pid: int, ptable: string}
+     */
+    private function inArticle(int $articleId, bool $lock = false): array
+    {
+        $article = $this->connection->fetchAssociative('SELECT * FROM tl_article WHERE id = ?'.($lock ? ' FOR UPDATE' : ''), [$articleId]);
+
+        if (false === $article || !\in_array('tl_article', ElementInspector::supportedPtables(), true) || !$this->security->isGranted(ContaoCorePermissions::DC_PREFIX.'tl_article', new ReadAction('tl_article', $article))) {
+            throw new ApiException(404, 'Der Artikel wurde nicht gefunden.');
+        }
+
+        return ['pid' => $articleId, 'ptable' => 'tl_article'];
+    }
+
+    /**
      * The default values of the DCA, for the columns of the table.
      *
-     * @param array<string, mixed> $target
+     * @param array{pid: int, ptable: string} $target
      *
      * @return array<string, mixed>
      */

@@ -50,16 +50,22 @@ export interface RecordField {
   editable: boolean;
 }
 
+/** Where a new element went: next to another one or into an empty article. */
+export interface InsertPlace {
+  after?: number;
+  into?: number;
+}
+
 export type ToFrame =
   | { type: 'cbe:hello' }
   | { type: 'cbe:end' }
   | { type: 'cbe:elements'; elements: FrameElement[] }
   | { type: 'cbe:value'; id: number; field: string; value: unknown }
   /**
-   * A new element is not in the page yet: it goes next to the one it was added after. Shown
-   * means it is brought into view and its text is opened.
+   * A new element is not in the page yet: it goes next to the one it was added after, or into
+   * the empty article. Shown means it is brought into view and its text is opened.
    */
-  | { type: 'cbe:refresh'; id: number; after?: number; show?: boolean }
+  | ({ type: 'cbe:refresh'; id: number; show?: boolean } & InsertPlace)
   /** Deleted, with the elements nested in it. */
   | { type: 'cbe:remove'; id: number }
   /** Brings an element into view, for example the one opened from the back end. */
@@ -84,6 +90,8 @@ export type ToShell =
   | { type: 'cbe:move'; id: number; target: number; position: MovePosition }
   /** A new element after this one. */
   | { type: 'cbe:insert'; id: number }
+  /** The first element of an article without any. */
+  | { type: 'cbe:insert-into'; article: number }
   | { type: 'cbe:pick-link'; id: number; value: string }
   /** Another file for the field, chosen in the shell. */
   | { type: 'cbe:pick-file'; id: number; field: string }

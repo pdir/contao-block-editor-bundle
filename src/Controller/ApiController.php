@@ -87,6 +87,19 @@ final class ApiController
         });
     }
 
+    /**
+     * The types that can be added to an article without elements.
+     */
+    #[Route('/articles/{id}/types', name: 'pdir_block_editor_api_article_types', requirements: ['id' => '[1-9]\d{0,9}'], methods: ['GET'])]
+    public function articleTypes(Request $request, int $id): Response
+    {
+        return $this->handle(function () use ($request, $id): Response {
+            $this->guard->assertCanRead($request);
+
+            return $this->json(['groups' => $this->creator->typesInArticle($id)]);
+        });
+    }
+
     #[Route('/elements', name: 'pdir_block_editor_api_create', methods: ['POST'])]
     public function create(Request $request): Response
     {
@@ -97,6 +110,16 @@ final class ApiController
             $target = $data['target'] ?? null;
             $position = $data['position'] ?? null;
             $type = $data['type'] ?? null;
+            $article = $data['article'] ?? null;
+
+            // Into an article without elements: there is nothing to be next to
+            if (null !== $article) {
+                if (!\is_int($article) || $article < 1 || null !== $target || !\is_string($type) || 1 !== preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $type)) {
+                    throw new ApiException(400, 'Ungültige Anfrage.');
+                }
+
+                return $this->json($this->creator->createInArticle($article, $type), 201);
+            }
 
             if (!\is_int($target) || $target < 1 || !\in_array($position, ElementMover::POSITIONS, true) || !\is_string($type) || 1 !== preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $type)) {
                 throw new ApiException(400, 'Ungültige Anfrage.');
