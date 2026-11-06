@@ -31,7 +31,9 @@ Unter „Mehr erfahren“ im Inspector lässt sich „Navigationslinks bearbeite
 ändert dann den Seitennamen direkt im Menü, und der Inspector zeigt die weiteren Angaben der Seite. Es gelten die Rechte
 für Seiten aus dem Backend, gespeichert wird mit Versionierung wie bei den Elementen.
 Auf der Detailseite einer Nachricht oder eines Events lassen sich der Titel (bei Nachrichten auch die Unterüberschrift)
-direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends. Ist kein Element
+direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends. In Nachrichtenlisten
+gilt das für Titel und Teaser jedes Beitrags; ein Teaser aus einem einzigen Absatz wird direkt in der Liste bearbeitet,
+längere mit Formatierung im Inspector. Ist kein Element
 ausgewählt, zeigt der Inspector Seitentitel und Beschreibung der aktuellen Seite für Suchmaschinen; sie werden ebenso
 gespeichert.
 Neue Elemente kommen über das Plus unter dem Griff oder den Button „Element darunter einfügen“ im Inspector unter das

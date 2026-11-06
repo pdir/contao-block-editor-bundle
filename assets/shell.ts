@@ -2,7 +2,7 @@ import { ICONS, iconElement } from './editor-icons';
 import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
 import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, FrameRecord, InlineConfig, ToFrame, ToShell, MovePosition, InsertPlace } from './protocol';
-import { readMessage } from './protocol';
+import { readMessage, recordKey } from './protocol';
 import { SaveError, SaveQueue, type SaveResult } from './save-queue';
 import type { NavPages } from './nav-pages';
 import type { ReaderRecord, ReaderRecordOptions } from './reader-record';
@@ -70,9 +70,9 @@ let selected: number | null = null;
 let selectedPage: number | null = null;
 /** Loaded once page names can be edited in the navigation. */
 let navPages: Promise<NavPages> | null = null;
-/** The news or event of a reader page, and whether it is shown in the inspector. */
-let readerRecord: Promise<ReaderRecord> | null = null;
-let recordSelected = false;
+/** The news or event of a reader page and the news of lists, by key, and the one shown in the inspector. */
+let records = new Map<string, Promise<ReaderRecord>>();
+let selectedRecord: string | null = null;
 /** Title and description of the page in the frame, for search engines. */
 let pageMeta: Promise<ReaderRecord> | null = null;
 /** The document in the frame that the shown data belongs to. */
@@ -351,7 +351,7 @@ async function insertElement(place: { after: number } | { into: number }): Promi
     post({ type: 'cbe:refresh', id: element.id, ...place, show: true });
     selected = element.id;
     selectedPage = null;
-    recordSelected = false;
+    selectedRecord = null;
     renderInspector();
     setStatus(`Eingefügt: ${schema[element.type]?.label ?? element.type}`, false, 'saved');
   } catch (error) {
@@ -506,7 +506,7 @@ async function goTo(url: string, addToHistory: boolean): Promise<void> {
   await moving;
   await queue.settle();
   await navPages?.then((pages) => pages.settle());
-  await readerRecord?.then((record) => record.settle());
+  await Promise.all([...records.values()].map((record) => record.then((loaded) => loaded.settle())));
   await pageMeta?.then((meta) => meta.settle());
 
   if (current !== navigation) {
@@ -688,7 +688,7 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       textarea.value = String(value ?? '');
       textarea.addEventListener('input', () => change(textarea.value));
       fieldSync.set(field.name, (next) => { textarea.value = String(next ?? ''); });
-      control = field.rich ? richControl(element, field, textarea, change) : textarea;
+      control = field.rich ? richControl(`tl_content.${element.id}`, field.label, textarea, change, field.name).root : textarea;
       break;
     }
     case 'tableWizard':
@@ -904,7 +904,7 @@ let richModule: Promise<typeof import('./rich-editor')> | null = null;
 const richFields: RichField[] = [];
 
 /** The text as in the back end, with its HTML a click away. Until the editor is loaded, or if it can't take the markup, only the HTML. */
-function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAreaElement, change: (value: unknown) => void): HTMLElement {
+function richControl(source: string, label: string, textarea: HTMLTextAreaElement, change: (value: unknown) => void, syncName?: string): { root: HTMLElement; set(html: string): void } {
   const box = document.createElement('div');
   const host = document.createElement('div');
   const toggle = document.createElement('button');
@@ -918,7 +918,6 @@ function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAre
   toggle.hidden = true;
   box.append(host, textarea, toggle);
 
-  const sync = fieldSync.get(field.name);
   let rich: RichField | null = null;
 
   const showRich = (on: boolean): void => {
@@ -933,12 +932,12 @@ function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAre
     rich?.destroy();
     rich = module.mountRichField(host, {
       html: textarea.value,
-      label: field.label,
+      label,
       change: (html) => {
         textarea.value = html;
         change(html);
       },
-      pick: (current, done) => openPicker(element.id, current, (value) => value !== null && done(value)),
+      pick: (current, done) => openPicker(source, current, (value) => value !== null && done(value)),
     });
 
     if (rich) {
@@ -961,12 +960,19 @@ function richControl(element: Element, field: FieldSchema, textarea: HTMLTextAre
     }
   });
 
-  fieldSync.set(field.name, (next) => {
-    sync?.(next);
-    rich?.set(String(next ?? ''));
-  });
+  const set = (html: string): void => rich?.set(html);
 
-  return box;
+  // An element's field follows what is typed in the page
+  if (syncName !== undefined) {
+    const sync = fieldSync.get(syncName);
+
+    fieldSync.set(syncName, (next) => {
+      sync?.(next);
+      set(String(next ?? ''));
+    });
+  }
+
+  return { root: box, set };
 }
 
 function renderInspector(): void {
@@ -977,14 +983,17 @@ function renderInspector(): void {
 
   const element = selected === null ? undefined : elements.get(selected);
 
-  void readerRecord?.then((record) => record.forget());
+  records.forEach((record) => void record.then((loaded) => loaded.forget()));
   void pageMeta?.then((meta) => meta.forget());
 
-  if (!element && recordSelected && readerRecord) {
-    void readerRecord.then((record) => {
-      if (recordSelected && selected === null) {
+  const shownRecord = selectedRecord;
+  const record = shownRecord === null ? undefined : records.get(shownRecord);
+
+  if (!element && record) {
+    void record.then((loaded) => {
+      if (selectedRecord === shownRecord && selected === null) {
         inspector.replaceChildren();
-        record.render(inspector);
+        loaded.render(inspector);
       }
     });
 
@@ -1079,12 +1088,12 @@ window.addEventListener('message', (event) => {
       showCorners(storedRoundCorners());
       showEditing(editing);
       selectedPage = null;
-      recordSelected = false;
+      selectedRecord = null;
 
       if (navPages) {
         post({ type: 'cbe:nav-edit', enabled: true });
       }
-      loadRecord(message.record);
+      loadRecords(message.record, message.records ?? []);
       loadPageMeta(message.page);
       resetPage();
       showPage(message.page);
@@ -1101,27 +1110,27 @@ window.addEventListener('message', (event) => {
       break;
     }
     case 'cbe:select':
-      if (selected !== message.id || selectedPage !== null || recordSelected) {
+      if (selected !== message.id || selectedPage !== null || selectedRecord !== null) {
         selected = message.id;
         selectedPage = null;
-        recordSelected = false;
+        selectedRecord = null;
         renderInspector();
       }
       break;
     case 'cbe:page-select':
       selected = null;
       selectedPage = message.id;
-      recordSelected = false;
+      selectedRecord = null;
       renderInspector();
       break;
     case 'cbe:record-select':
       selected = null;
       selectedPage = null;
-      recordSelected = true;
+      selectedRecord = message.key;
       renderInspector();
       break;
     case 'cbe:record-change':
-      void readerRecord?.then((record) => record.change(message.field, message.value, 'page'));
+      void records.get(message.key)?.then((record) => record.change(message.field, message.value, 'page'));
       break;
     case 'cbe:page-change':
       void navPages?.then((pages) => pages.rename(message.id, message.title, 'page'));
@@ -1146,7 +1155,7 @@ window.addEventListener('message', (event) => {
       }
       break;
     case 'cbe:pick-link':
-      openPicker(message.id, message.value);
+      openPicker(`tl_content.${message.id}`, message.value);
       break;
     case 'cbe:pick-file': {
       const element = elements.get(message.id);
@@ -1319,7 +1328,7 @@ function setEditing(enabled: boolean): void {
     post({ type: 'cbe:end' });
     selected = null;
     selectedPage = null;
-    recordSelected = false;
+    selectedRecord = null;
     renderInspector();
   }
 
@@ -1329,7 +1338,7 @@ function setEditing(enabled: boolean): void {
 editToggle.addEventListener('click', () => setEditing(!editing));
 
 /** One that is still being saved keeps its queue until done. */
-function setupRecord(previous: Promise<ReaderRecord> | null, record: FrameRecord, options: Pick<ReaderRecordOptions, 'post' | 'hint' | 'lengths'>): Promise<ReaderRecord> {
+function setupRecord(previous: Promise<ReaderRecord> | null | undefined, record: FrameRecord, options: Pick<ReaderRecordOptions, 'post' | 'hint' | 'lengths' | 'rich'>): Promise<ReaderRecord> {
   return (import(readerRecordUrl) as Promise<typeof import('./reader-record')>).then(async ({ setupReaderRecord }) => {
     await previous?.then((loaded) => loaded.settle());
 
@@ -1340,9 +1349,18 @@ function setupRecord(previous: Promise<ReaderRecord> | null, record: FrameRecord
   });
 }
 
-/** Only a reader page has a record. */
-function loadRecord(record: FrameRecord | null): void {
-  readerRecord = record ? setupRecord(readerRecord, record, { post, hint: 'Auch direkt in der Seite änderbar. Weitere Angaben im klassischen Backend.' }) : null;
+/** The record of a reader page and the news of the lists on the page. */
+function loadRecords(reader: FrameRecord | null, listed: FrameRecord[]): void {
+  const previous = records;
+
+  records = new Map();
+
+  for (const record of reader ? [reader, ...listed] : listed) {
+    const key = recordKey(record);
+    const hint = `${record === reader ? 'Auch direkt in der Seite' : 'Titel und Teaser auch direkt in der Liste'} änderbar. Weitere Angaben im klassischen Backend.`;
+
+    records.set(key, setupRecord(previous.get(key), record, { post, hint, rich: (source, textarea, label, change) => richControl(source, label, textarea, (value) => change(String(value))) }));
+  }
 }
 
 /** The meta data of the page, shown when no element is selected. */
@@ -1436,7 +1454,7 @@ function showShortcuts(): void {
   post({ type: 'cbe:end' });
   selected = null;
   selectedPage = null;
-  recordSelected = false;
+  selectedRecord = null;
   showInspector(true, true);
   renderInspector();
 
@@ -1517,7 +1535,7 @@ post({ type: 'cbe:hello' });
 window.addEventListener('pagehide', () => {
   queue.flush(true);
   void navPages?.then((pages) => pages.flush(true));
-  void readerRecord?.then((record) => record.flush(true));
+  records.forEach((record) => void record.then((loaded) => loaded.flush(true)));
   void pageMeta?.then((meta) => meta.flush(true));
 });
 
@@ -1538,12 +1556,12 @@ const pickerTitle = pickerDialog.querySelector('h2') as HTMLElement;
 let pickerDone: (value: string | null) => void = () => {};
 
 /** Without a callback, the choice goes to the text being edited in the page. */
-function openPicker(id: number, value: string, done: (value: string | null) => void = (choice) => post({ type: 'cbe:picked', value: choice })): void {
+function openPicker(source: string, value: string, done: (value: string | null) => void = (choice) => post({ type: 'cbe:picked', value: choice })): void {
   pickerDone = done;
   const url = new URL(pickerUrl, window.location.origin);
   url.searchParams.set('context', 'link');
   url.searchParams.set('extras[fieldType]', 'radio');
-  url.searchParams.set('extras[source]', `tl_content.${id}`);
+  url.searchParams.set('extras[source]', source);
   // Contao adds the flag on save, the picker only knows the plain tag
   url.searchParams.set('value', value.replace(/\|urlattr(?=\}\}$)/, ''));
   url.searchParams.set('popup', '1');

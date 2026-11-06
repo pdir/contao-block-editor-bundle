@@ -14,6 +14,8 @@ interface BarOptions {
   /** Null as soon as the link is gone: the bar disappears then. */
   anchor(): BarAnchor | null;
   open: (() => void) | null;
+  /** Above the link if there is room, so that the text below stays reachable. */
+  above?: boolean;
 }
 
 export interface ReadOptions extends BarOptions {
@@ -54,6 +56,7 @@ function button(text: string, onClick: () => void): HTMLButtonElement {
 export class LinkBar {
   readonly root = document.createElement('div');
   private anchor: BarOptions['anchor'] | null = null;
+  private above = false;
 
   constructor() {
     this.root.className = 'cbe-link-bar';
@@ -183,7 +186,7 @@ export class LinkBar {
     this.anchor = null;
   }
 
-  /** Below the link, or above it if there is no room left. */
+  /** Below the link, or above it if there is no room left, or the other way round. */
   place(): void {
     const anchor = this.anchor?.();
 
@@ -199,13 +202,15 @@ export class LinkBar {
 
     const { width, height } = this.root.getBoundingClientRect();
     const below = anchor.bottom + GAP;
-    const fits = below + height + MARGIN <= window.innerHeight;
+    const above = anchor.top - height - GAP;
+    const fitsBelow = below + height + MARGIN <= window.innerHeight;
 
     this.root.style.left = `${Math.max(MARGIN, Math.min(anchor.left, window.innerWidth - width - MARGIN))}px`;
-    this.root.style.top = `${fits ? below : Math.max(MARGIN, anchor.top - height - GAP)}px`;
+    this.root.style.top = `${(this.above && above >= MARGIN) || !fitsBelow ? Math.max(MARGIN, above) : below}px`;
   }
 
-  private render(controls: HTMLElement[], { anchor }: BarOptions): void {
+  private render(controls: HTMLElement[], { anchor, above }: BarOptions): void {
+    this.above = Boolean(above);
     this.root.replaceChildren(...controls);
     this.root.hidden = false;
     this.anchor = anchor;

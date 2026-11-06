@@ -36,18 +36,25 @@ export interface NavPage {
   editable: boolean;
 }
 
-/** The news or event of a reader page, named by the server. */
+/** The news or event of a reader page, named by the server, or a news of a list. */
 export interface FrameRecord {
   table: string;
   id: number;
-  /** The reader module, where the fields of the record are shown. */
+  /** The reader module or the news in the list, where the fields of the record are shown. */
   scope: string;
+}
+
+/** A record by table and ID, such as "tl_news.12". */
+export function recordKey(record: { table: string; id: number }): string {
+  return `${record.table}.${record.id}`;
 }
 
 export interface RecordField {
   name: string;
   value: string;
   editable: boolean;
+  /** Formatted text: edited in the page only if it is a single paragraph. */
+  rich?: boolean;
 }
 
 /** Where a new element went: next to another one or into an empty article. */
@@ -78,11 +85,11 @@ export type ToFrame =
   | { type: 'cbe:nav-edit'; enabled: boolean }
   | { type: 'cbe:nav-pages'; pages: NavPage[] }
   | { type: 'cbe:page-title'; id: number; title: string }
-  | { type: 'cbe:record'; scope: string; fields: RecordField[] }
-  | { type: 'cbe:record-value'; field: string; value: string };
+  | { type: 'cbe:record'; key: string; scope: string; fields: RecordField[] }
+  | { type: 'cbe:record-value'; key: string; field: string; value: string };
 
 export type ToShell =
-  | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[]; record: FrameRecord | null }
+  | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[]; record: FrameRecord | null; records: FrameRecord[] }
   | { type: 'cbe:navigate'; href: string }
   | { type: 'cbe:select'; id: number | null }
   | { type: 'cbe:change'; id: number; field: string; value: unknown }
@@ -98,8 +105,8 @@ export type ToShell =
   | { type: 'cbe:nav-links'; urls: string[] }
   | { type: 'cbe:page-select'; id: number }
   | { type: 'cbe:page-change'; id: number; title: string }
-  | { type: 'cbe:record-select' }
-  | { type: 'cbe:record-change'; field: string; value: string }
+  | { type: 'cbe:record-select'; key: string }
+  | { type: 'cbe:record-change'; key: string; field: string; value: string }
   /** Pressed while the page had the focus. */
   | { type: 'cbe:shortcut'; name: Shortcut };
 

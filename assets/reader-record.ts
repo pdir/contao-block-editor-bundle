@@ -1,7 +1,7 @@
 // The shell's side of records with fields besides the content elements: the news or event
 // on a reader page and the meta data of the page itself. Loads their fields, saves them and
 // shows them in the inspector. Only loaded when needed.
-import type { FrameRecord, ToFrame } from './protocol';
+import { recordKey, type FrameRecord, type ToFrame } from './protocol';
 import { SaveError, SaveQueue } from './save-queue';
 
 interface RecordField {
@@ -10,6 +10,8 @@ interface RecordField {
   value: string;
   editable: boolean;
   multiline: boolean;
+  /** Formatted text, edited with the editor of the inspector. */
+  rich?: boolean;
   /** Shown while the field is empty: what Contao uses instead. */
   placeholder: string;
 }
@@ -34,6 +36,8 @@ export interface ReaderRecordOptions {
   hint?: string;
   /** The number of characters that search engines show, by field. */
   lengths?: Record<string, number>;
+  /** The editor for formatted text around the text area, from the shell. */
+  rich?: (source: string, textarea: HTMLTextAreaElement, label: string, change: (html: string) => void) => { root: HTMLElement; set(html: string): void };
 }
 
 export class ReaderRecord {
@@ -41,6 +45,7 @@ export class ReaderRecord {
   private readonly queue: SaveQueue;
   private readonly inputs = new Map<string, HTMLInputElement | HTMLTextAreaElement>();
   private readonly counts = new Map<string, HTMLElement>();
+  private readonly richSync = new Map<string, (html: string) => void>();
   /** The texts as typed, which the inspector shows again when it opens. */
   private readonly values = new Map<string, string>();
 
@@ -102,7 +107,7 @@ export class ReaderRecord {
       this.values.set(name, value);
     }
 
-    this.options.post?.({ type: 'cbe:record', scope: this.record.scope, fields: this.data.fields });
+    this.options.post?.({ type: 'cbe:record', key: recordKey(this.record), scope: this.record.scope, fields: this.data.fields });
   }
 
   /** Typed in the page or in the inspector, or the text the server knows after a failed save. */
@@ -114,13 +119,17 @@ export class ReaderRecord {
     }
 
     if (origin !== 'page') {
-      this.options.post?.({ type: 'cbe:record-value', field, value });
+      this.options.post?.({ type: 'cbe:record-value', key: recordKey(this.record), field, value });
     }
 
     const input = this.inputs.get(field);
 
     if (input && input.value !== value) {
       input.value = value;
+
+      if (origin !== 'inspector') {
+        this.richSync.get(field)?.(value);
+      }
     }
 
     this.count(field);
@@ -152,6 +161,7 @@ export class ReaderRecord {
   forget(): void {
     this.inputs.clear();
     this.counts.clear();
+    this.richSync.clear();
   }
 
   render(container: HTMLElement): void {
@@ -167,7 +177,7 @@ export class ReaderRecord {
     heading.textContent = data.label;
     container.append(heading);
 
-    for (const { name, label: text, value, editable, multiline, placeholder } of data.fields) {
+    for (const { name, label: text, value, editable, multiline, rich, placeholder } of data.fields) {
       const id = `cbe-record-${name}`;
       const field = document.createElement('div');
       field.className = 'cbe-field';
@@ -187,7 +197,14 @@ export class ReaderRecord {
         input.rows = 4;
       }
 
-      field.append(label, input);
+      if (rich && editable && input instanceof HTMLTextAreaElement && this.options.rich) {
+        const control = this.options.rich(recordKey(this.record), input, text, (html) => this.change(name, html, 'inspector'));
+
+        this.richSync.set(name, control.set);
+        field.append(label, control.root);
+      } else {
+        field.append(label, input);
+      }
 
       if (this.options.lengths?.[name]) {
         const count = document.createElement('p');

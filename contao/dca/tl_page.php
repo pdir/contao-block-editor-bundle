@@ -7,4 +7,6 @@ declare(strict_types=1);
 $GLOBALS['TL_DCA']['tl_page']['list']['operations']['block_editor'] = [
     'route' => 'pdir_block_editor',
     'icon' => 'bundles/contaoblockeditor/icon.svg',
+    // The editor is a page of its own: Turbo would load it into the back end and hang
+    'attributes' => 'data-turbo="false" data-turbo-prefetch="false"',
 ];

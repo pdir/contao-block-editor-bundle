@@ -6,6 +6,8 @@ namespace Pdir\ContaoBlockEditorBundle\Tests\EventListener;
 
 use Contao\CoreBundle\Event\ContaoCoreEvents;
 use Contao\CoreBundle\Event\PreviewUrlCreateEvent;
+use Contao\CoreBundle\Event\MenuEvent;
+use Knp\Menu\MenuFactory;
 use Pdir\ContaoBlockEditorBundle\EventListener\Menu\BackendHeaderListener;
 use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -32,6 +34,34 @@ final class BackendHeaderListenerTest extends TestCase
         self::assertSame([], $this->listener(null)->context(new Request(['do' => 'article', 'id' => 3])));
         self::assertSame([], $this->listener(7)->context(new Request(['do' => 'files', 'id' => 3])));
         self::assertSame([], $this->listener(7)->context(new Request()));
+    }
+
+    public function testLinkLeavesTheBackEndWithoutTurbo(): void
+    {
+        $security = $this->createStub(Security::class);
+        $security->method('isGranted')->willReturn(true);
+
+        $router = $this->createStub(RouterInterface::class);
+        $router->method('generate')->willReturn('/contao/block-editor');
+
+        $requestStack = new RequestStack();
+        $requestStack->push(new Request(['do' => 'page']));
+
+        $factory = new MenuFactory();
+        $tree = $factory->createItem('headerMenu');
+        $tree->addChild('preview');
+        $tree->addChild('submenu');
+        $tree->addChild('burger');
+
+        $listener = new BackendHeaderListener($security, $router, $requestStack, $this->createStub(TranslatorInterface::class), new EventDispatcher());
+        $listener(new MenuEvent($factory, $tree));
+
+        $link = $tree->getChild('block_editor');
+
+        self::assertNotNull($link);
+        self::assertSame(['preview', 'block_editor', 'submenu', 'burger'], array_keys($tree->getChildren()));
+        self::assertSame('false', $link->getLinkAttribute('data-turbo'));
+        self::assertSame('false', $link->getLinkAttribute('data-turbo-prefetch'));
     }
 
     private function listener(int|null $page): BackendHeaderListener

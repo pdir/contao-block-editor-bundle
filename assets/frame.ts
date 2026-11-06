@@ -334,6 +334,39 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
   return true;
 }
 
+/**
+ * The place in the text nearest to the point, found by the characters themselves. The
+ * browser can't tell it if a link lies over the text: its hit is the link then.
+ */
+function caretInText(root: HTMLElement, x: number, y: number): { node: Text; offset: number } | null {
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let best: { node: Text; offset: number; distance: number } | null = null;
+
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    for (let index = 0; index < node.length; index++) {
+      range.setStart(node, index);
+      range.setEnd(node, index + 1);
+
+      const { left, right, top, bottom } = range.getBoundingClientRect();
+
+      // Only the characters of the line that was clicked
+      if (y < top || y > bottom || right === left) {
+        continue;
+      }
+
+      const before = x < (left + right) / 2;
+      const distance = x < left ? left - x : x > right ? x - right : 0;
+
+      if (!best || distance < best.distance) {
+        best = { node, offset: before ? index : index + 1, distance };
+      }
+    }
+  }
+
+  return best;
+}
+
 function placeCaret(x: number, y: number): void {
   const position = document.caretPositionFromPoint?.(x, y);
   const selection = window.getSelection();
@@ -1459,12 +1492,47 @@ document.addEventListener('pointerdown', (event) => {
     return;
   }
 
-  const field = record?.fieldAt(event.target);
+  const hitField = record?.fieldAt(event.target);
 
-  if (field && record) {
-    if (!record.isEditing(event.target)) {
+  if (hitField && record) {
+    // The link of a card may lie over all of it: the field under the pointer counts. The
+    // stretched part of the link is outside of the link's own box.
+    const inBox = (target: HTMLElement): boolean => {
+      const { left, right, top, bottom } = target.getBoundingClientRect();
+
+      return event.clientX >= left && event.clientX <= right && event.clientY >= top && event.clientY <= bottom;
+    };
+    const field = record.fieldsBeside(hitField).find((target) => target !== hitField && inBox(target)) ?? hitField;
+    const onText = inBox(field);
+
+    const starting = !record.isEditing(field);
+
+    if (starting) {
       endSession();
-      record.start(field);
+      record.start(field, onText);
+
+      // The headline of a news in a list leads to the news, from the bar above it
+      const link = field.closest<HTMLAnchorElement>('a[href]');
+
+      if (link && onText) {
+        showNavActions(link, field.hasAttribute('data-cbe-editable'), 'Den Titel direkt hier ändern', true);
+      }
+    }
+
+    if (starting && record.isEditing(field)) {
+      // The caret goes where the click was, also below a link on top: else to the end.
+      // Focusing the text put it at the start. Later clicks select as usual.
+      const position = caretInText(field, event.clientX, event.clientY);
+      const selection = window.getSelection();
+
+      event.preventDefault();
+
+      if (position) {
+        selection?.collapse(position.node, position.offset);
+      } else {
+        selection?.selectAllChildren(field);
+        selection?.collapseToEnd();
+      }
     }
 
     return;
@@ -1533,25 +1601,47 @@ document.addEventListener('pointerdown', (event) => {
 const script = document.querySelector<HTMLScriptElement>('script[data-cbe-preview]');
 const framePaths: FramePaths = { base: script?.dataset.cbeBase ?? '', preview: script?.dataset.cbePreview ?? '' };
 nav = new NavLinks(framePaths, (link) => closestId(link) !== null, toShell);
-record = new RecordFields((node) => closestId(node) !== null, toShell);
+record = new RecordFields((node, scope) => {
+  const owner = closestId(node)?.root;
+
+  return Boolean(owner && owner !== scope && scope.contains(owner));
+}, toShell);
 
 /** A link of the navigation still leads to its page, from the bar above it. */
-function showNavActions(link: HTMLAnchorElement, editable: boolean): void {
+function showNavActions(link: HTMLAnchorElement, editable: boolean, hint = 'Den Namen direkt im Menü ändern', above = false): void {
   linkBar.showRead({
     anchor: rectAnchor(link),
     label: linkLabel(link.href, window.location.origin, framePaths),
     open: () => openLink(link.href),
     edit: null,
-    hint: editable ? 'Den Namen direkt im Menü ändern' : 'Änderbar im klassischen Backend',
+    hint: editable ? hint : 'Änderbar im klassischen Backend',
     close: () => {
       endSession();
       link.focus();
     },
     focus: false,
+    above,
   });
 }
 
 const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
+/** The news of the lists on the page, marked by the server (see NewsListListener). */
+function listedNews(): FrameRecord[] {
+  const ids = new Set<number>();
+
+  for (const news of document.querySelectorAll('[class*="cbe-news-"]')) {
+    for (const name of news.classList) {
+      const id = /^cbe-news-(\d+)$/.exec(name)?.[1];
+
+      if (id && !(frameRecord?.table === 'tl_news' && frameRecord.id === Number(id))) {
+        ids.add(Number(id));
+      }
+    }
+  }
+
+  return [...ids].slice(0, 50).map((id) => ({ table: 'tl_news', id, scope: `.cbe-news-${id}` }));
+}
+
 const [recordTable, recordId] = (script?.dataset.cbeRecord ?? '').split('.');
 const frameRecord: FrameRecord | null = recordId ? { table: recordTable, id: Number(recordId), scope: script?.dataset.cbeRecordScope ?? '' } : null;
 
@@ -1906,10 +1996,10 @@ window.addEventListener('message', (event) => {
       nav?.setTitle(message.id, message.title);
       break;
     case 'cbe:record':
-      record?.apply(message.scope, message.fields);
+      record?.apply(message.key, message.scope, message.fields);
       break;
     case 'cbe:record-value':
-      record?.setValue(message.field, message.value);
+      record?.setValue(message.key, message.field, message.value);
       break;
     case 'cbe:picked':
       if (message.value !== null) {
@@ -1941,7 +2031,7 @@ window.addEventListener('message', (event) => {
 function announce(): void {
   const ids = Array.from(document.querySelectorAll(`[${ID_ATTRIBUTE}]`), (node) => Number(node.getAttribute(ID_ATTRIBUTE)));
   // The time origin identifies this document: the shell may get several announcements
-  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)], record: frameRecord });
+  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)], record: frameRecord, records: listedNews() });
 }
 
 announce();

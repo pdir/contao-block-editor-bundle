@@ -49,6 +49,9 @@ final class BackendHeaderListener
             ->setLinkAttribute('class', 'icon-block-editor')
             ->setLinkAttribute('title', $this->translator->trans('MSC.blockEditorTitle', [], 'contao_default'))
             ->setLinkAttribute('data-contao--tooltips-target', 'tooltip')
+            // The editor is a page of its own: Turbo would load it into the back end and hang
+            ->setLinkAttribute('data-turbo', 'false')
+            ->setLinkAttribute('data-turbo-prefetch', 'false')
             ->setExtra('translation_domain', 'contao_default')
         ;
 

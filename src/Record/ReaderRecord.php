@@ -22,7 +22,8 @@ use Symfony\Component\Routing\RouterInterface;
 /**
  * Records with fields that the editor changes besides the content elements: the news or
  * event that a reader module shows, whose headline is a field of the record and which the
- * module finds by the last part of the address, and the meta data of the page itself.
+ * module finds by the last part of the address, the news of a list (see NewsListListener)
+ * and the meta data of the page itself.
  */
 final class ReaderRecord
 {
@@ -32,7 +33,7 @@ final class ReaderRecord
      * whose value is used when one of them is empty.
      */
     public const READERS = [
-        'tl_news' => ['class' => 'mod_newsreader', 'module' => 'news', 'model' => 'Contao\NewsModel', 'label' => 'Nachricht', 'fields' => ['headline', 'subheadline'], 'fallbacks' => []],
+        'tl_news' => ['class' => 'mod_newsreader', 'module' => 'news', 'model' => 'Contao\NewsModel', 'label' => 'Nachricht', 'fields' => ['headline', 'subheadline', 'teaser'], 'fallbacks' => []],
         'tl_calendar_events' => ['class' => 'mod_eventreader', 'module' => 'calendar', 'model' => 'Contao\CalendarEventsModel', 'label' => 'Event', 'fields' => ['title'], 'fallbacks' => []],
         // Without a page title, Contao shows the name of the page
         'tl_page' => ['class' => null, 'module' => 'page', 'model' => 'Contao\PageModel', 'label' => 'Seite', 'fields' => ['pageTitle', 'description'], 'fallbacks' => ['pageTitle' => 'title']],
@@ -123,6 +124,7 @@ final class ReaderRecord
                 'value' => StringUtil::convertBasicEntities((string) $row[$field]),
                 'editable' => $editable && $this->fieldPolicy->canEdit($table, $field),
                 'multiline' => 'textarea' === ($GLOBALS['TL_DCA'][$table]['fields'][$field]['inputType'] ?? null),
+                'rich' => isset($GLOBALS['TL_DCA'][$table]['fields'][$field]['eval']['rte']),
                 'placeholder' => null === $fallback ? '' : StringUtil::convertBasicEntities((string) $row[$fallback]),
             ];
         }
