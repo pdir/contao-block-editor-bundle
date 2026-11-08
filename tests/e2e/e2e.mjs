@@ -203,7 +203,7 @@ const rev=async(pg,id)=>(await pg.evaluate(async id=>(await fetch('/contao/block
 const moved=()=>p.waitForResponse(x=>x.url().endsWith('/position'));
 // drag with the handle. Firefox only reports a real movement onto the element
 await p.mouse.move(1,1);await fm.locator('[data-be-id="10"]').hover();
-const hb=await fm.locator('.cbe-handle').boundingBox();ok('handle shown',!!hb);
+const hb=await fm.locator('.cbe-handle[draggable]').boundingBox();ok('handle shown',!!hb);
 const t=await fm.locator('[data-be-id="11"]').boundingBox();
 let w=moved();
 await p.mouse.move(hb.x+13,hb.y+13);await p.mouse.down();await p.mouse.move(t.x+40,t.y+t.height/2+1,{steps:4});await p.mouse.move(t.x+40,t.y+t.height-1,{steps:4});await p.mouse.up();
@@ -265,19 +265,19 @@ await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument
 await fl.locator('[data-be-id="16"] .rte').click();await p.locator('#cbe-inspector .cbe-field').first().waitFor();await p.locator('#cbe-inspector').click({position:{x:5,y:5}});
 const lineHeights=await p.locator('.cbe-description').evaluateAll(n=>n.map(x=>x.getBoundingClientRect().height));
 ok('inspector: descriptions take one line',lineHeights.length>0&&Math.max(...lineHeights)<24,Math.max(...lineHeights));
-const long=p.locator('.cbe-description').filter({hasText:/.{50}/}).first();
-const h1=(await long.boundingBox()).height;await long.hover();const h2=(await long.boundingBox()).height;
-ok('inspector: description opens on hover',h2>h1,h1+' → '+h2);
+const long=p.locator('.cbe-description:visible').filter({hasText:/.{50}/}).first();
+await long.hover();await p.waitForTimeout(100);
+ok('inspector: full description beside the inspector on hover',await p.locator('.cbe-tooltip').isVisible()&&(await p.locator('.cbe-tooltip').textContent())==(await long.textContent()),await p.locator('.cbe-tooltip').textContent());
 await p.locator('#cbe-inspector h2').hover();
 const row=p.locator('.cbe-field--row').first();const lb=await row.locator('label').boundingBox(),sb=await row.locator('select').boundingBox();
 ok('inspector: select next to its label',sb.x>=lb.x+lb.width-1&&sb.y<lb.y+lb.height,JSON.stringify([lb,sb]));
-await row.locator('select').focus();ok('inspector: description opens on focus',await row.locator('.cbe-description').evaluate(n=>getComputedStyle(n).whiteSpace=='normal'));
+await row.locator('select').focus();await p.waitForTimeout(100);ok('inspector: description shown on focus',await p.locator('.cbe-tooltip').isVisible()&&(await p.locator('.cbe-tooltip').textContent())==(await row.locator('.cbe-description').textContent()),await p.locator('.cbe-tooltip').textContent());
 await p.keyboard.press('Escape');
 }
 if(process.env.E2E_DB_CONTAINER)// links in editable text
 {
 const fl=p.frameLocator('#cbe-frame');
-const bar=fl.locator('.cbe-link-bar');
+const bar=fl.locator('.cbe-link-bar:not(.cbe-format-bar)');
 const q=x=>execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-N','-e',x]).toString().trim();
 const stored=()=>q('SELECT text FROM tl_content WHERE id=16');
 const ready=async(id=16)=>{await p.goto(B+'/contao/block-editor?id=2');await p.waitForFunction(i=>{const d=document.getElementById('cbe-frame').contentDocument;return d?.documentElement?.classList.contains('cbe-ready')&&d.querySelector(`[data-be-id="${i}"]`)},id,{timeout:10000})};
@@ -295,28 +295,28 @@ await p.keyboard.press('Escape');await p.waitForTimeout(100);ok('link: Escape cl
 await link.click();await bar.getByRole('button',{name:'Öffnen'}).click();
 await fl.locator('[data-be-id="20"]').waitFor({timeout:10000});await p.waitForURL(/id=3/,{timeout:5000}).catch(()=>{});ok('link: open navigates',new URL(p.url()).searchParams.get('id')=='3');
 await ready();await link.click();await bar.getByRole('button',{name:'Bearbeiten'}).click();await fl.locator('[data-be-id="16"] .ProseMirror').waitFor();
-await bar.locator('input').waitFor({timeout:3000});
-ok('link: edit shows the raw tag',await bar.locator('input').inputValue()=='{{link_url::3}}',await bar.locator('input').inputValue());
+await bar.locator('input').first().waitFor({timeout:3000});
+ok('link: edit shows the raw tag',await bar.locator('input').first().inputValue()=='{{link_url::3}}',await bar.locator('input').first().inputValue());
 ok('link: caret is in the text',await fl.locator('[data-be-id="16"] .ProseMirror').evaluate(n=>n.contains(n.ownerDocument.activeElement)||n===n.ownerDocument.activeElement));
 ok('link: no open for raw tag',await bar.getByRole('button',{name:'Öffnen'}).count()==0);
-await bar.locator('input').fill('javascript:alert(1)');await bar.getByRole('button',{name:'Übernehmen'}).click();
+await bar.locator('input').first().fill('javascript:alert(1)');await bar.getByRole('button',{name:'Übernehmen'}).click();
 ok('link: unsafe address refused',(await bar.textContent()).includes('nicht erlaubt')&&(await fl.locator('[data-be-id="16"] .ProseMirror a').getAttribute('href'))=='{{link_url::3}}',await bar.textContent());
-let wait=saved();await bar.locator('input').fill('www.example.com/x');await bar.locator('input').press('Enter');await wait;await p.waitForTimeout(200);
+let wait=saved();await bar.locator('input').first().fill('www.example.com/x');await bar.locator('input').first().press('Enter');await wait;await p.waitForTimeout(200);
 let s=stored();ok('link: address saved',s.includes('href="https://www.example.com/x"')&&s.includes('>Geheimnis</a>'),s);
 ok('link: no attributes added',!/target=|rel=|class=/.test(s),s);
 wait=saved();await bar.getByRole('button',{name:'Entfernen'}).click();await wait;await p.waitForTimeout(200);
 s=stored();ok('link: removed, text stays',!s.includes('<a')&&s.includes('Geheimnis'),s);ok('link: bar gone after removal',!(await bar.isVisible()));
-await p.keyboard.press('ControlOrMeta+a');await p.keyboard.press('ControlOrMeta+k');await bar.locator('input').waitFor({timeout:3000});
-ok('link: shortcut focuses the address',await bar.locator('input').evaluate(n=>n===n.ownerDocument.activeElement));
+await p.keyboard.press('ControlOrMeta+a');await p.keyboard.press('ControlOrMeta+k');await bar.locator('input').first().waitFor({timeout:3000});
+ok('link: shortcut focuses the address',await bar.locator('input').first().evaluate(n=>n===n.ownerDocument.activeElement));
 wait=saved();await p.keyboard.type('/geheim.html');await p.keyboard.press('Enter');await wait;await p.waitForTimeout(200);
 s=stored();ok('link: shortcut creates link',s.includes('href="/geheim.html"'),s);
-await bar.locator('input').press('Escape');await p.waitForTimeout(100);
+await bar.locator('input').first().press('Escape');await p.waitForTimeout(100);
 ok('link: Escape in bar keeps editing',!(await bar.isVisible())&&await fl.locator('[data-be-id="16"] .ProseMirror').count()==1);
 await p.keyboard.press('Escape');
 // attributes survive editing
 setText('<p><a href="/a.html" target="_blank" rel="noopener" title="T">A</a> b</p>');
-await ready();await link.click();await bar.getByRole('button',{name:'Bearbeiten'}).click();await bar.locator('input').waitFor();
-wait=saved();await bar.locator('input').fill('/b.html');await bar.locator('input').press('Enter');await wait;await p.waitForTimeout(200);
+await ready();await link.click();await bar.getByRole('button',{name:'Bearbeiten'}).click();await bar.locator('input').first().waitFor();
+wait=saved();await bar.locator('input').first().fill('/b.html');await bar.locator('input').first().press('Enter');await wait;await p.waitForTimeout(200);
 s=stored();ok('link: other attributes survive',s.includes('href="/b.html"')&&s.includes('target="_blank"')&&s.includes('title="T"'),s);
 await p.keyboard.press('Escape');
 // keyboard only
@@ -357,7 +357,7 @@ const b20=await fl.locator('[data-be-id="20"]').boundingBox();await p.mouse.clic
 await p.locator('#cbe-inspector .cbe-field').first().waitFor({timeout:3000});ok('nav: new page is editable',await fl.locator('[data-be-id="20"] .ProseMirror').count()==1);
 await p.keyboard.press('Escape');
 await p.goBack();await shown(10);ok('nav: back',new URL(p.url()).searchParams.get('id')=='2'&&await fl.locator('[data-be-id="20"]').count()==0,p.url());
-ok('nav: back resets inspector',await p.locator('#cbe-inspector .cbe-field').count()==0);
+ok('nav: back resets inspector',await p.locator('#cbe-inspector .cbe-field').evaluateAll(n=>n.every(x=>x.closest('.cbe-page-meta, .cbe-help-settings'))));
 await p.goForward();await shown(20);ok('nav: forward',new URL(p.url()).searchParams.get('id')=='3',p.url());
 await p.reload();await shown(20);ok('nav: reload stays on the page',await fl.locator('[data-be-id="20"]').count()==1);
 await open(p);await shown(10);
@@ -399,7 +399,7 @@ const tb=await toggle.boundingBox(),lb=await p.locator('.cbe-bar a.cbe-link').bo
 ok('inspector toggle: right before the back end link',tb.x+tb.width<=lb.x&&lb.x-(tb.x+tb.width)<40&&await toggle.getAttribute('aria-pressed')=='true');
 const withInspector=(await p.locator('#cbe-frame').boundingBox()).width;
 const ib2=await fl.locator('[data-be-id="10"] .rte').boundingBox();await p.mouse.click(ib2.x+20,ib2.y+8);await fl.locator('.ProseMirror').waitFor({timeout:3000});
-await p.locator('#cbe-inspector .cbe-field input[type="text"], #cbe-inspector .cbe-field textarea').first().waitFor({timeout:3000});
+await p.locator('#cbe-inspector .cbe-button--danger').waitFor({timeout:3000});
 await p.keyboard.press('Escape');await p.waitForTimeout(100);
 await toggle.click();
 ok('inspector toggle: hides',!(await insp.isVisible())&&await toggle.getAttribute('aria-pressed')=='false');
@@ -455,6 +455,46 @@ ok('nav: editor sees read-only hint',(await e.pg.locator('#cbe-status').textCont
 ok('nav: editor address stays editable',new URL(e.pg.url()).searchParams.get('id')=='2',e.pg.url());
 const be=await e.pg.frameLocator('#cbe-frame').locator('[data-be-id="20"]').boundingBox();await e.pg.mouse.click(be.x+20,be.y+8);await e.pg.waitForTimeout(300);
 ok('nav: editor cannot edit there',await e.pg.frameLocator('#cbe-frame').locator('.ProseMirror').count()==0);
+}
+// delete directly at the element: the button beside it, the bar above a text and the Delete key
+if(process.env.E2E_DB_CONTAINER){
+const q=x=>execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-N','-e',x]).toString().trim();
+const row=(id,n)=>`(${id},1,'tl_article',${n},1,'text','a:2:{s:5:"value";s:0:"";s:4:"unit";s:2:"h2";}','<p>Weg ${id}</p>','','a:2:{i:0;s:0:"";i:1;s:0:"";}')`;
+q(`DELETE FROM tl_content WHERE id IN (40,41,42);INSERT INTO tl_content (id,pid,ptable,sorting,tstamp,type,headline,text,unfilteredHtml,cssID) VALUES ${row(40,9100)},${row(41,9200)},${row(42,9300)}`);
+await p.goto(B+'/contao/block-editor?id=2');
+await p.waitForFunction(()=>{const d=document.getElementById('cbe-frame').contentDocument;return d?.documentElement?.classList.contains('cbe-ready')&&d.querySelector('[data-be-id="42"]')},null,{timeout:10000});
+const fd=p.frameLocator('#cbe-frame');
+const deleted=id=>p.waitForResponse(x=>x.url().endsWith('/api/elements/'+id)&&x.request().method()=='DELETE',{timeout:5000});
+const gone=async id=>{await fd.locator(`[data-be-id="${id}"]`).waitFor({state:'detached',timeout:3000}).catch(()=>{});return q(`SELECT COUNT(*) FROM tl_content WHERE id=${id}`)=='0'&&await fd.locator(`[data-be-id="${id}"]`).count()==0};
+// 1. the bin between the handle and the plus
+await p.mouse.move(1,1);await fd.locator('[data-be-id="40"]').hover();await p.waitForTimeout(300);
+const bin=fd.locator('.cbe-handle--delete');
+const hy=(await fd.locator('.cbe-handle[draggable]').boundingBox()).y,dy=(await bin.boundingBox()).y,ay=(await fd.locator('.cbe-handle--add').boundingBox()).y;
+ok('delete: bin between handle and plus',hy<dy&&dy<ay,`${hy} < ${dy} < ${ay}`);
+let dr=deleted(40);await bin.click();let dres=await dr;
+ok('delete: bin beside the element',dres.status()==200&&await gone(40),dres.status());
+ok('delete: undo offered',await p.locator('#cbe-undo').isVisible()&&(await p.locator('#cbe-status').textContent()).includes('Gelöscht'),await p.locator('#cbe-status').textContent());
+await p.locator('#cbe-undo').click();
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument?.querySelector('[data-be-id="40"]'),null,{timeout:10000});
+ok('delete: undo brings it back',q('SELECT COUNT(*) FROM tl_content WHERE id=40')=='1');
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument?.documentElement?.classList.contains('cbe-ready'));
+// 2. the bin in the bar above a text, which saves what was typed first
+const tb=await fd.locator('[data-be-id="41"] .rte').boundingBox();await p.mouse.click(tb.x+20,tb.y+8);await fd.locator('[data-be-id="41"] .ProseMirror').waitFor({timeout:3000});
+await p.keyboard.type('Z');
+const barBin=fd.locator('.cbe-format-bar .cbe-format-bar__delete');await barBin.waitFor({timeout:3000});
+const order41=[];p.on('request',r=>{if(r.url().endsWith('/api/elements/41'))order41.push(r.method())});
+dr=deleted(41);await barBin.click();dres=await dr;
+ok('delete: bin in the bar while editing',dres.status()==200&&await gone(41)&&await fd.locator('.cbe-format-bar').isHidden(),dres.status());
+ok('delete: typed text saved before deleting',order41.at(-1)=='DELETE'&&!order41.slice(0,-1).includes('DELETE'),order41.join());
+// 3. the Delete key on the focused element, but not in a text
+const tc=await fd.locator('[data-be-id="42"] .rte').boundingBox();await p.mouse.click(tc.x+20,tc.y+8);await fd.locator('[data-be-id="42"] .ProseMirror').waitFor({timeout:3000});
+await p.keyboard.press('End');await p.keyboard.press('Backspace');await p.waitForTimeout(300);
+ok('delete: Backspace in a text deletes a character',await fd.locator('[data-be-id="42"]').count()==1&&(await fd.locator('[data-be-id="42"] .rte').textContent()).includes('Weg 4'),await fd.locator('[data-be-id="42"] .rte').textContent());
+await p.keyboard.press('Escape');await p.waitForTimeout(200);
+await fd.locator('[data-be-id="42"]').focus();
+dr=deleted(42);await p.keyboard.press('Delete');dres=await dr;
+ok('delete: Delete key on the focused element',dres.status()==200&&await gone(42),dres.status());
+q('DELETE FROM tl_content WHERE id IN (40,41,42)');
 }
 console.log('browser errors:',pageErrors);
 await browser.close();
