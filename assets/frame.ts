@@ -1,5 +1,5 @@
 import type { Editor } from '@tiptap/core';
-import { ICONS, iconElement } from './editor-icons';
+import { ICONS, iconElement, type Icon } from './editor-icons';
 import { LinkBar } from './link-bar';
 import { NavLinks } from './nav-links';
 import { RecordFields } from './record-fields';
@@ -20,7 +20,7 @@ const HANDLE_SPACE = 30;
 const HANDLE_CORNER = 32;
 const HANDLE_MARGIN = 8;
 const HANDLE_SWITCH_DELAY = 200;
-/** The button for a new element, below the handle. */
+/** The buttons for deleting and for a new element, below the handle. */
 const HANDLE_GAP = 32;
 const ADDER_HEIGHT = 28;
 
@@ -239,7 +239,7 @@ function startRich(element: FrameElement, inline: InlineConfig, root: HTMLElemen
     void loadRich().then(() => {
       if (rich && current === activations && !session && !viewing() && root.isConnected) {
         startRich(element, inline, root, event);
-        addParentButton(root);
+        addElementButtons(root);
       }
     });
 
@@ -526,14 +526,7 @@ function startFile(element: FrameElement, inline: InlineConfig, image: HTMLEleme
 
   const many = Array.isArray(element.values[inline.field]) && (element.values[inline.field] as unknown[]).length > 1;
   const title = many ? 'Bilder auswählen' : 'Bild austauschen';
-  const button = document.createElement('button');
-
-  button.type = 'button';
-  button.title = title;
-  button.setAttribute('aria-label', title);
-  button.append(iconElement(document, ICONS.image));
-  button.addEventListener('pointerdown', (down) => down.preventDefault());
-  button.addEventListener('click', () => {
+  const button = barButton(title, ICONS.image, () => {
     endSession();
     toShell({ type: 'cbe:pick-file', id: element.id, field: inline.field });
   });
@@ -768,14 +761,7 @@ function startPart(element: FrameElement, inline: InlineConfig, target: HTMLElem
   formatBar.setAttribute('role', 'toolbar');
   formatBar.setAttribute('aria-label', options.label);
   formatBar.replaceChildren(...options.tools.map(([icon, title, enabled, run]) => {
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.title = title;
-    button.setAttribute('aria-label', title);
-    button.disabled = !enabled;
-    button.append(iconElement(document, ICONS[icon]));
-    button.addEventListener('pointerdown', (down) => down.preventDefault());
-    button.addEventListener('click', () => {
+    const button = barButton(title, ICONS[icon], () => {
       const next = run();
       endSession();
 
@@ -783,6 +769,8 @@ function startPart(element: FrameElement, inline: InlineConfig, target: HTMLElem
         options.restart(next);
       }
     });
+
+    button.disabled = !enabled;
 
     return button;
   }));
@@ -1011,7 +999,7 @@ function activate(id: number, root: HTMLElement, event: PointerEvent | null): bo
   }
 
   if (session) {
-    addParentButton(root);
+    addElementButtons(root);
   }
 
   toShell({ type: 'cbe:select', id });
@@ -1206,41 +1194,58 @@ let updateFormatBar: (() => void) | null = null;
 
 /**
  * Nested elements, e.g. in a group or a module, cover their parent: it can only be reached
- * from here. Before the formats, or alone in the bar for a plain text.
+ * from here. With deleting the element, before the formats or alone in the bar for a plain text.
  */
-function addParentButton(root: HTMLElement): void {
+function addElementButtons(root: HTMLElement): void {
+  const id = Number(root.getAttribute(ID_ATTRIBUTE));
   const parent = closestId(root.parentElement);
+  const buttons: HTMLButtonElement[] = [];
 
-  if (!parent) {
-    return;
+  if (parent) {
+    buttons.push(barButton('Übergeordnetes Element auswählen', ICONS.parent, () => {
+      endSession();
+      parent.root.focus({ preventScroll: true });
+      showHandleOn(parent.root);
+      toShell({ type: 'cbe:select', id: parent.id });
+    }));
   }
 
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.title = 'Übergeordnetes Element auswählen';
-  button.setAttribute('aria-label', button.title);
-  button.append(iconElement(document, ICONS.parent));
-  // The text keeps its selection until the click selects the parent
-  button.addEventListener('pointerdown', (event) => event.preventDefault());
-  button.addEventListener('click', () => {
-    endSession();
-    parent.root.focus({ preventScroll: true });
-    showHandleOn(parent.root);
-    toShell({ type: 'cbe:select', id: parent.id });
-  });
+  if (id) {
+    const remove = barButton('Element löschen (Entf)', ICONS.trash, () => requestDelete(id));
+
+    remove.classList.add('cbe-format-bar__delete');
+    buttons.push(remove);
+  }
+
+  if (!buttons.length) {
+    return;
+  }
 
   if (formatBar.hidden) {
     formatBar.setAttribute('role', 'toolbar');
     formatBar.setAttribute('aria-label', 'Element');
-    formatBar.replaceChildren(button);
+    formatBar.replaceChildren(...buttons);
     formatBar.hidden = false;
   } else {
     const divider = document.createElement('span');
     divider.className = 'cbe-format-bar__divider';
-    formatBar.prepend(button, divider);
+    formatBar.prepend(...buttons, divider);
   }
 
   placeFormatBar();
+}
+
+function barButton(title: string, icon: Icon, run: () => void): HTMLButtonElement {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.title = title;
+  button.setAttribute('aria-label', title);
+  button.append(iconElement(document, icon));
+  // The text or the image keeps its selection until the click
+  button.addEventListener('pointerdown', (event) => event.preventDefault());
+  button.addEventListener('click', run);
+
+  return button;
 }
 
 function placeFormatBar(): void {
@@ -1284,6 +1289,24 @@ adder.addEventListener('click', () => {
   }
 });
 
+// Deleting, between the two. Mouse only too: the keyboard has Delete and the inspector a button
+const deleter = document.createElement('button');
+deleter.type = 'button';
+deleter.className = 'cbe-handle cbe-handle--delete';
+deleter.title = 'Element löschen (Entf)';
+deleter.tabIndex = -1;
+deleter.setAttribute('aria-hidden', 'true');
+deleter.append(iconElement(document, ICONS.trash));
+deleter.addEventListener('click', () => requestDelete(Number(handleRoot?.getAttribute(ID_ATTRIBUTE))));
+
+/** What was typed is saved first: the shell waits for it before deleting. */
+function requestDelete(id: number): void {
+  if (id) {
+    endSession();
+    toShell({ type: 'cbe:delete', id });
+  }
+}
+
 const dropLine = document.createElement('div');
 dropLine.className = 'cbe-drop-line';
 dropLine.setAttribute('aria-hidden', 'true');
@@ -1298,7 +1321,7 @@ let pointerY = 0;
 
 function placeHandle(): void {
   if (!handleRoot?.isConnected) {
-    handle.hidden = adder.hidden = true;
+    handle.hidden = adder.hidden = deleter.hidden = true;
     handleRoot = null;
 
     return;
@@ -1310,11 +1333,12 @@ function placeHandle(): void {
   const handleTop = Math.max(top, 2);
 
   // Inside of the element it would cover text, which must not happen while typing
-  handle.hidden = adder.hidden = !fitsBeside && session?.element.id === Number(handleRoot.getAttribute(ID_ATTRIBUTE));
-  handle.style.left = adder.style.left = x;
+  handle.hidden = adder.hidden = deleter.hidden = !fitsBeside && session?.element.id === Number(handleRoot.getAttribute(ID_ATTRIBUTE));
+  handle.style.left = adder.style.left = deleter.style.left = x;
   handle.style.top = `${handleTop}px`;
+  deleter.style.top = `${handleTop + HANDLE_GAP}px`;
   // At the bottom edge, where the new element goes, but below the handle and in the window
-  adder.style.top = `${Math.max(handleTop + HANDLE_GAP, Math.min(bottom - ADDER_HEIGHT, window.innerHeight - ADDER_HEIGHT - 2))}px`;
+  adder.style.top = `${Math.max(handleTop + 2 * HANDLE_GAP, Math.min(bottom - ADDER_HEIGHT, window.innerHeight - ADDER_HEIGHT - 2))}px`;
 }
 
 function hideDropLine(): void {
@@ -1706,6 +1730,14 @@ document.addEventListener('keydown', (event) => {
     return;
   }
 
+  // Only on the element itself, never in a text or on a control inside of it
+  if ((event.key === 'Delete' || event.key === 'Backspace') && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey && event.target instanceof HTMLElement && event.target.hasAttribute(ID_ATTRIBUTE) && !isTyping(event.target)) {
+    event.preventDefault();
+    requestDelete(Number(event.target.getAttribute(ID_ATTRIBUTE)));
+
+    return;
+  }
+
   if (event.key === 'Escape') {
     endSession();
     toShell({ type: 'cbe:select', id: null });
@@ -1736,8 +1768,8 @@ document.addEventListener('keydown', (event) => {
 });
 
 function applyElements(elements: FrameElement[]): void {
-  document.body.append(handle, adder, dropLine, linkBar.root, formatBar);
-  handle.hidden = adder.hidden = true;
+  document.body.append(handle, deleter, adder, dropLine, linkBar.root, formatBar);
+  handle.hidden = adder.hidden = deleter.hidden = true;
   dropLine.hidden = true;
 
   for (const element of elements) {

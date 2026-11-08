@@ -1308,6 +1308,9 @@ window.addEventListener('message', (event) => {
     case 'cbe:insert-into':
       void insertElement({ into: message.article });
       break;
+    case 'cbe:delete':
+      void deleteElement(message.id);
+      break;
     case 'cbe:commit':
       if (message.render) {
         awaitingRender.add(message.id);

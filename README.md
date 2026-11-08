@@ -56,6 +56,8 @@ JSON-Spalte speichert (z. B. „Serverseitiger Seitenumbruch“ der Galerie), be
 Felder, die andere Bundles erst beim Bearbeiten in die Paletten aufnehmen (ihre `onload_callback`), erscheinen
 ebenfalls, etwa „Erweiterte CSS-Klassen“. Die „CSS-Stil Auswahl“ des CSS Style Selector zeigt je Stilgruppe eine Auswahl.
 „Löschen“ im Inspector entfernt das gewählte Element samt verschachtelter Elemente, wenn der Benutzer es löschen darf.
+Dasselbe geht direkt am Element: mit dem Papierkorb zwischen Griff und Plus, beim Bearbeiten eines Textes mit dem
+Papierkorb in der Leiste darüber oder mit `Entf` bzw. `⌫`, wenn das Element selbst den Fokus hat.
 Wie im Backend landet es in „Wiederherstellen“; direkt danach holt „Rückgängig“ in der Kopfzeile es zurück.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu
 bewegen: Dann führt jeder Link zu seiner Seite. Jeder neue Editor startet mit eingeschaltetem Bearbeiten.

@@ -24,6 +24,8 @@ export const ICONS = {
   columnAfter: { d: 'M4 5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm2 1v12h2V6H6Zm4 0v12h1V6h-1Zm5 5h2V9h2v2h2v2h-2v2h-2v-2h-2v-2Z', rule: 'evenodd' },
   rowDelete: { d: 'M5 4h14a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Zm1 2v2h12V6H6Zm0 4v1h12v-1H6Zm3 6h6v2H9v-2Z', rule: 'evenodd' },
   columnDelete: { d: 'M4 5a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5Zm2 1v12h2V6H6Zm4 0v12h1V6h-1Zm5 5h6v2h-6v-2Z', rule: 'evenodd' },
+  // Not from HugeRTE, drawn to match: a bin with a lid, for deleting the element
+  trash: { d: 'M9 3h6v2h4v2h-1v12a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V7H5V5h4V3ZM8 7v12h8V7H8Zm1 2h2v8H9V9Zm4 0h2v8h-2V9Z', rule: 'evenodd' },
   // A picture with mountains and the sun, for choosing another one
   image: { d: 'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Zm0 2v12h14V6H5Zm1 11 4-5 3 3.5 2-2 3 3.5H6Zm9-9a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3Z', rule: 'evenodd' },
   source: { d: 'M9.8 15.7c.3.3.3.8 0 1-.3.4-.9.4-1.2 0l-4.4-4.1a.8.8 0 0 1 0-1.2l4.4-4.2c.3-.3.9-.3 1.2 0 .3.3.3.8 0 1.1L6 12l3.8 3.7ZM14.2 15.7c-.3.3-.3.8 0 1 .4.4.9.4 1.2 0l4.4-4.1c.3-.3.3-.9 0-1.2l-4.4-4.2a.8.8 0 0 0-1.2 0c-.3.3-.3.8 0 1.1L18 12l-3.8 3.7Z', rule: 'nonzero' },

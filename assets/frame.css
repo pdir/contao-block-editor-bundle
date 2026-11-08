@@ -147,10 +147,30 @@ cto-toolbar,
   background: linear-gradient(currentColor 0 0) center / 12px 1.5px no-repeat, linear-gradient(currentColor 0 0) center / 1.5px 12px no-repeat;
 }
 
+.cbe-handle.cbe-handle--delete,
+.cbe-handle.cbe-handle--delete:active {
+  cursor: pointer;
+}
+
+.cbe-handle--delete::before {
+  content: none;
+}
+
+.cbe-handle--delete svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+  margin: auto;
+}
+
 .cbe-handle:hover,
 .cbe-empty-article__add:is(:hover, :focus-visible) {
   background: #f47c00;
   color: #fff;
+}
+
+.cbe-handle.cbe-handle--delete:hover {
+  background: #d70015;
 }
 
 .cbe-handle:active {
@@ -226,6 +246,10 @@ cto-toolbar,
   width: 1px;
   margin: 3px;
   background: rgb(118 118 128 / 30%);
+}
+
+.cbe-format-bar .cbe-format-bar__delete:hover {
+  color: #d70015;
 }
 
 .cbe-format-bar [aria-pressed='true'] {
@@ -316,7 +340,8 @@ cto-toolbar,
     color: #aeaeb2;
   }
 
-  .cbe-link-bar__error {
+  .cbe-link-bar__error,
+  .cbe-format-bar .cbe-format-bar__delete:hover {
     color: #ff8a80;
   }
 }

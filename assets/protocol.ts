@@ -99,6 +99,8 @@ export type ToShell =
   | { type: 'cbe:insert'; id: number }
   /** The first element of an article without any. */
   | { type: 'cbe:insert-into'; article: number }
+  /** The element with the ones nested in it, as with the button in the inspector. */
+  | { type: 'cbe:delete'; id: number }
   | { type: 'cbe:pick-link'; id: number; value: string }
   /** Another file for the field, chosen in the shell. */
   | { type: 'cbe:pick-file'; id: number; field: string }
