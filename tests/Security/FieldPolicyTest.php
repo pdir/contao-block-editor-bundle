@@ -48,7 +48,25 @@ final class FieldPolicyTest extends TestCase
         yield 'password' => ['secret', ['inputType' => 'password', 'sql' => 'text'], false];
         yield 'custom rendering' => ['custom', [...$text, 'input_field_callback' => ['a', 'b']], false];
         yield 'read-only' => ['locked', [...$text, 'eval' => ['readonly' => true]], false];
-        yield 'date' => ['start', [...$text, 'eval' => ['rgxp' => 'datim']], false];
+        yield 'date' => ['start', [...$text, 'eval' => ['rgxp' => 'datim']], true];
+        yield 'date in a text area' => ['start', ['inputType' => 'textarea', 'sql' => 'text', 'eval' => ['rgxp' => 'date']], false];
+        yield 'several dates' => ['start', [...$text, 'eval' => ['rgxp' => 'date', 'multiple' => true, 'size' => 2]], false];
+        yield 'field stored as JSON' => ['serverPagination', ['inputType' => 'checkbox', 'targetColumn' => 'jsonData'], true];
+        yield 'storage of the JSON fields' => ['jsonData', ['inputType' => 'text', 'sql' => ['type' => 'json'], 'virtualTarget' => true], false];
+        yield 'style selector without its bundle' => ['cssStyleSelector', ['inputType' => 'cssStyleSelector', 'sql' => 'blob NULL', 'eval' => ['multiple' => true]], false];
+    }
+
+    public function testSupportsTheStyleSelectorWithItsBundle(): void
+    {
+        $GLOBALS['BE_FFL']['cssStyleSelector'] = 'Widget';
+
+        try {
+            $policy = new FieldPolicy($this->createStub(Security::class));
+
+            $this->assertTrue($policy->isSupported('cssStyleSelector', ['inputType' => 'cssStyleSelector', 'sql' => 'blob NULL', 'eval' => ['multiple' => true]]));
+        } finally {
+            unset($GLOBALS['BE_FFL']);
+        }
     }
 
     public function testExtractsFieldsFromPalettes(): void

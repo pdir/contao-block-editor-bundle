@@ -16,9 +16,13 @@ use Contao\Widget;
 use Doctrine\DBAL\ArrayParameterType;
 use Doctrine\DBAL\Connection;
 use Pdir\ContaoBlockEditorBundle\DataContainer\CallbackInvoker;
+use Pdir\ContaoBlockEditorBundle\DataContainer\DateValue;
+use Pdir\ContaoBlockEditorBundle\DataContainer\EditContext;
 use Pdir\ContaoBlockEditorBundle\DataContainer\EditorDataContainer;
+use Pdir\ContaoBlockEditorBundle\DataContainer\VirtualFields;
 use Pdir\ContaoBlockEditorBundle\Security\FieldPolicy;
 use Symfony\Bundle\SecurityBundle\Security;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use Symfony\Component\Routing\RouterInterface;
 
@@ -65,7 +69,26 @@ final class ElementInspector
         private readonly FieldPolicy $fieldPolicy,
         private readonly RouterInterface $router,
         private readonly FileReferences|null $files = null,
+        private readonly RequestStack|null $requestStack = null,
     ) {
+    }
+
+    /**
+     * Runs the record's onload callbacks for what is done inside, as the back end does for its
+     * edit form, and restores the DCA afterwards. Other bundles add their fields there.
+     *
+     * @template T
+     *
+     * @param array<string, mixed> $row
+     * @param \Closure(EditorDataContainer): T $inside
+     *
+     * @return T
+     */
+    private function asInEditForm(array $row, \Closure $inside): mixed
+    {
+        $dc = new EditorDataContainer(self::TABLE, $row);
+
+        return EditContext::forRecord(self::TABLE, $dc, $this->requestStack?->getCurrentRequest(), static fn (): mixed => $inside($dc));
     }
 
     /**
@@ -117,9 +140,16 @@ final class ElementInspector
             $values = [];
 
             if ($editable) {
-                foreach ($this->getEditableFields($row) as $field) {
-                    $values[$field] = $this->toClientValue($field, $row[$field] ?? null);
-                }
+                $values = $this->asInEditForm($row, function () use ($row): array {
+                    $record = VirtualFields::expand($row, self::TABLE);
+                    $values = [];
+
+                    foreach ($this->getEditableFields($row) as $field) {
+                        $values[$field] = $this->toClientValue($field, $record[$field] ?? null);
+                    }
+
+                    return $values;
+                });
             }
 
             $id = (int) $row['id'];
@@ -139,14 +169,20 @@ final class ElementInspector
     }
 
     /**
+     * The fields of each type. Fields that other bundles add in their onload callbacks depend on
+     * a record; an element of the type from the page stands for its type, so that they are
+     * described. The inspector only shows the fields an element has values for.
+     *
      * @param list<string> $types
+     * @param list<int>    $ids   Elements of the page
      *
      * @return array<string, array<string, mixed>>
      */
-    public function getSchema(array $types): array
+    public function getSchema(array $types, array $ids = []): array
     {
         $this->loadDca();
 
+        $examples = $this->examples($types, $ids);
         $schema = [];
 
         foreach ($types as $type) {
@@ -154,32 +190,66 @@ final class ElementInspector
                 continue;
             }
 
-            $row = ['id' => 0, 'type' => $type];
-            $dc = new EditorDataContainer(self::TABLE, $row);
-            $fields = [];
+            $schema[$type] = $this->asInEditForm($examples[$type] ?? ['id' => 0, 'type' => $type], function (EditorDataContainer $dc) use ($type): array {
+                $fields = [];
 
-            foreach ($this->getEditableFields($row) as $field) {
-                if ($definition = $this->describeField($field, $dc)) {
-                    $fields[] = $definition;
+                // The section headline is described on its own below
+                foreach ($this->getEditableFields(['type' => $type]) as $field) {
+                    if ($definition = $this->describeField($field, $dc)) {
+                        $fields[] = $definition;
+                    }
                 }
-            }
 
-            $schema[$type] = [
-                // The name editors know from the back end, which bundles provide for their own types
-                'label' => self::typeLabel($type),
-                'fields' => $fields,
-                'inline' => self::inlineFields($type, array_column($fields, 'name')),
-            ];
+                $schema = [
+                    // The name editors know from the back end, which bundles provide for their own types
+                    'label' => self::typeLabel($type),
+                    'fields' => $fields,
+                    'inline' => self::inlineFields($type, array_column($fields, 'name')),
+                ];
 
-            // Whether it applies depends on the parent of the record, not on the type
-            $config = $GLOBALS['TL_DCA'][self::TABLE]['fields'][self::SECTION_FIELD] ?? null;
+                // Whether it applies depends on the parent of the record, not on the type
+                $config = $GLOBALS['TL_DCA'][self::TABLE]['fields'][self::SECTION_FIELD] ?? null;
 
-            if (\is_array($config) && $this->fieldPolicy->isSupported(self::SECTION_FIELD, $config) && $this->fieldPolicy->canEdit(self::TABLE, self::SECTION_FIELD) && ($section = $this->describeField(self::SECTION_FIELD, $dc))) {
-                $schema[$type]['section'] = $section;
-            }
+                if (\is_array($config) && $this->fieldPolicy->isSupported(self::SECTION_FIELD, $config) && $this->fieldPolicy->canEdit(self::TABLE, self::SECTION_FIELD) && ($section = $this->describeField(self::SECTION_FIELD, $dc))) {
+                    $schema['section'] = $section;
+                }
+
+                return $schema;
+            });
         }
 
         return $schema;
+    }
+
+    /**
+     * One element of each type that the user may edit.
+     *
+     * @param list<string> $types
+     * @param list<int>    $ids
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    private function examples(array $types, array $ids): array
+    {
+        if (!$ids || !$types) {
+            return [];
+        }
+
+        $rows = $this->connection->fetchAllAssociative(
+            'SELECT * FROM tl_content WHERE id IN (?) AND type IN (?) AND ptable IN (?) ORDER BY id',
+            [\array_slice($ids, 0, self::MAX_IDS), $types, self::supportedPtables()],
+            [ArrayParameterType::INTEGER, ArrayParameterType::STRING, ArrayParameterType::STRING],
+        );
+
+        $examples = [];
+
+        foreach ($rows as $row) {
+            if (!isset($examples[$row['type']]) && $this->security->isGranted(ContaoCorePermissions::DC_PREFIX.self::TABLE, new UpdateAction(self::TABLE, $row))) {
+                $examples[(string) $row['type']] = $row;
+            }
+        }
+
+        return $examples;
     }
 
     public static function typeLabel(string $type): string
@@ -412,6 +482,15 @@ final class ElementInspector
         $config = $GLOBALS['TL_DCA'][self::TABLE]['fields'][$field];
         $value = StringUtil::deserialize($value);
 
+        if (DateValue::isDate($config)) {
+            return DateValue::toInput($value, (string) $config['eval']['rgxp']);
+        }
+
+        // The chosen CSS classes, by style
+        if (StyleGroups::INPUT_TYPE === ($config['inputType'] ?? null)) {
+            return \is_array($value) ? array_values(array_map(strval(...), array_filter($value, \is_scalar(...)))) : [];
+        }
+
         if (!empty($config['eval']['basicEntities'])) {
             $value = StringUtil::convertBasicEntities($value);
         }
@@ -491,6 +570,21 @@ final class ElementInspector
 
         if ('imageSize' === $config['inputType']) {
             $definition['sizes'] = self::optionGroups($attributes['options'] ?? []);
+        }
+
+        if (DateValue::isDate($config)) {
+            $definition['date'] = (string) $eval['rgxp'];
+        }
+
+        if (StyleGroups::INPUT_TYPE === $config['inputType']) {
+            $groups = StyleGroups::describe(array_values(array_filter($attributes['options'] ?? [], \is_array(...))));
+
+            // Nothing to choose for the record, as in the back end
+            if (!$groups) {
+                return null;
+            }
+
+            $definition['styles'] = $groups;
         }
 
         return $definition + [

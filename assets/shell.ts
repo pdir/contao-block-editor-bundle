@@ -13,7 +13,7 @@ interface FieldSchema {
   name: string;
   label: string;
   description: string;
-  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard' | 'fileTree' | 'imageSize' | 'rowWizard';
+  input: 'text' | 'textarea' | 'select' | 'checkbox' | 'radio' | 'inputUnit' | 'tableWizard' | 'listWizard' | 'fileTree' | 'imageSize' | 'rowWizard' | 'cssStyleSelector';
   rich: boolean;
   multiple: boolean;
   mandatory: boolean;
@@ -27,6 +27,10 @@ interface FieldSchema {
   files?: import('./media-field').FileConfig;
   /** The sizes of the themes and the resize modes, in groups. */
   sizes?: { label: string; options: { value: string; label: string }[] }[];
+  /** A date, a time or both, typed in the browser's own field. */
+  date?: 'date' | 'time' | 'datim';
+  /** The groups of the CSS style selector, each with its own choice. */
+  styles?: { id: string; label: string; description: string; category: string; multiple: boolean; options: { value: string; label: string }[] }[];
 }
 
 interface TypeSchema {
@@ -108,7 +112,7 @@ function inlineOf(element: Element): InlineConfig[] {
   const inline = schema[element.type]?.inline ?? [];
   // Templates can show any text field, which only the page can tell
   const texts: InlineConfig[] = (schema[element.type]?.fields ?? [])
-    .filter(({ name, input, rich, multiple, size }) => ((input === 'text' && !multiple && size <= 1) || (input === 'textarea' && !rich)) && name in element.values && !inline.some(({ field }) => field === name))
+    .filter(({ name, input, rich, multiple, size, date }) => ((input === 'text' && !multiple && size <= 1 && !date) || (input === 'textarea' && !rich)) && name in element.values && !inline.some(({ field }) => field === name))
     .filter(({ name }) => element.values[name] === null || typeof element.values[name] === 'string')
     .map(({ name, input }) => ({ field: name, selector: null, mode: 'plain', scalar: true, ...(input === 'textarea' ? { multiline: true } : {}) }));
   // Rich texts beyond the element's main text, such as those of other bundles
@@ -124,7 +128,9 @@ function inlineOf(element: Element): InlineConfig[] {
 }
 
 function fieldsOf(element: Element): FieldSchema[] {
-  const fields = schema[element.type]?.fields ?? [];
+  // Fields that other bundles add for some records only, such as the advanced CSS classes:
+  // the server sends a value for each field of the record
+  const fields = (schema[element.type]?.fields ?? []).filter(({ name }) => !element.editable || name in element.values);
 
   return hasSection(element) ? [schema[element.type].section as FieldSchema, ...fields] : fields;
 }
@@ -330,7 +336,7 @@ async function insertElement(place: { after: number } | { into: number }): Promi
     const element = data.element;
 
     if (!schema[element.type]) {
-      const { types } = await getJson<{ types: Record<string, TypeSchema> }>(`${schemaUrl}?types=${element.type}`);
+      const { types } = await getJson<{ types: Record<string, TypeSchema> }>(`${schemaUrl}?types=${element.type}&ids=${element.id}`);
       schema = { ...schema, ...types };
     }
 
@@ -624,7 +630,9 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
     }
   }
 
-  const { types: loadedSchema } = await getJson<{ types: Record<string, TypeSchema> }>(`${schemaUrl}?types=${[...types].sort().join(',')}`);
+  // One element of each type stands for it, for the fields that other bundles add per record
+  const examples = [...types].sort().map((type) => [...elements.values()].find((element) => element.type === type && element.editable)?.id).filter(Boolean);
+  const { types: loadedSchema } = await getJson<{ types: Record<string, TypeSchema> }>(`${schemaUrl}?types=${[...types].sort().join(',')}${examples.length ? `&ids=${examples.join(',')}` : ''}`);
 
   if (load !== currentLoad) {
     return;
@@ -661,6 +669,86 @@ async function loadElements(ids: number[], load: number, page: FramePage | null)
 /** Loaded with the first table. */
 let tableField: Promise<typeof import('./table-field')> | null = null;
 let mediaField: Promise<typeof import('./media-field')> | null = null;
+
+/**
+ * The CSS style selector: one choice per style group, a list for groups with several styles.
+ * The value is the list of the chosen styles; the server keeps styles of groups not offered here.
+ */
+function styleControl(field: FieldSchema, value: unknown, change: (value: unknown) => void, id: string): HTMLElement {
+  const root = document.createElement('div');
+  const groups = field.styles ?? [];
+  const chosen = new Set(Array.isArray(value) ? value.map(String) : []);
+  const offered = new Set(groups.flatMap((group) => group.options.map((option) => option.value)));
+  const readers: (() => string[])[] = [];
+  const categories = new Set(groups.map((group) => group.category));
+  const update = (): void => change([...[...chosen].filter((style) => !offered.has(style)), ...readers.flatMap((read) => read())]);
+  let category: string | null = null;
+
+  root.className = 'cbe-styles';
+  root.setAttribute('role', 'group');
+  root.setAttribute('aria-label', field.label);
+
+  for (const group of groups) {
+    // Headings only to tell several categories apart
+    if (categories.size > 1 && group.category !== category && group.category) {
+      const heading = document.createElement('p');
+      heading.className = 'cbe-styles__category';
+      heading.textContent = group.category;
+      root.append(heading);
+    }
+
+    category = group.category;
+
+    const row = document.createElement('div');
+    const label = document.createElement('label');
+    const controlId = `${id}-${group.id}`;
+
+    row.className = 'cbe-styles__group';
+    row.title = group.description;
+    label.textContent = group.label;
+
+    if (group.multiple) {
+      const list = document.createElement('div');
+      const boxes = group.options.map((option) => {
+        const line = document.createElement('label');
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.value = option.value;
+        box.checked = chosen.has(option.value);
+        box.addEventListener('change', update);
+        line.append(box, ` ${option.label}`);
+        list.append(line);
+
+        return box;
+      });
+
+      list.setAttribute('role', 'group');
+      list.setAttribute('aria-label', group.label);
+      list.id = controlId;
+      readers.push(() => boxes.filter((box) => box.checked).map((box) => box.value));
+      row.append(label, list);
+    } else {
+      const select = document.createElement('select');
+
+      select.add(new Option('–', ''));
+
+      for (const option of group.options) {
+        select.add(new Option(option.label, option.value, false, chosen.has(option.value)));
+      }
+
+      select.id = controlId;
+      label.htmlFor = controlId;
+      select.addEventListener('change', update);
+      readers.push(() => (select.value ? [select.value] : []));
+      row.classList.add('cbe-field--row');
+      row.append(label, select);
+    }
+
+    root.append(row);
+  }
+
+  return root;
+}
 
 function createField(element: Element, field: FieldSchema): HTMLElement {
   const wrapper = document.createElement('div');
@@ -752,6 +840,10 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       control = select;
       break;
     }
+    case 'cssStyleSelector': {
+      control = styleControl(field, value, change, id);
+      break;
+    }
     case 'checkbox': {
       if (field.multiple) {
         const group = document.createElement('div');
@@ -831,6 +923,17 @@ function createField(element: Element, field: FieldSchema): HTMLElement {
       }
 
       const input = document.createElement('input');
+
+      // The browser's own picker; saved once the date is complete, not with each digit
+      if (field.date) {
+        input.type = { date: 'date', time: 'time', datim: 'datetime-local' }[field.date];
+        input.value = String(value ?? '');
+        input.addEventListener('change', () => change(input.value));
+        fieldSync.set(field.name, (next) => { input.value = String(next ?? ''); });
+        control = input;
+        break;
+      }
+
       input.value = String(value ?? '');
 
       if (field.maxlength) {

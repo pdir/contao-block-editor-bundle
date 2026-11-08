@@ -6,6 +6,8 @@ namespace Pdir\ContaoBlockEditorBundle\Security;
 
 use Contao\CoreBundle\Security\ContaoCorePermissions;
 use Contao\DataContainer;
+use Pdir\ContaoBlockEditorBundle\DataContainer\DateValue;
+use Pdir\ContaoBlockEditorBundle\Element\StyleGroups;
 use Symfony\Bundle\SecurityBundle\Security;
 
 /**
@@ -15,7 +17,7 @@ use Symfony\Bundle\SecurityBundle\Security;
  */
 final class FieldPolicy
 {
-    private const SUPPORTED_INPUT_TYPES = ['text', 'textarea', 'select', 'checkbox', 'radio', 'inputUnit', 'tableWizard', 'listWizard', 'fileTree', 'imageSize', 'rowWizard'];
+    private const SUPPORTED_INPUT_TYPES = ['text', 'textarea', 'select', 'checkbox', 'radio', 'inputUnit', 'tableWizard', 'listWizard', 'fileTree', 'imageSize', 'rowWizard', StyleGroups::INPUT_TYPE];
 
     /** Columns that define a record's identity, position or type. */
     private const PROTECTED_FIELDS = ['id', 'pid', 'ptable', 'sorting', 'tstamp', 'type'];
@@ -42,14 +44,20 @@ final class FieldPolicy
             return false;
         }
 
-        // Only real columns; virtual fields are combined by the core on save
-        if (!isset($config['sql']) || isset($config['input_field_callback']) || isset($config['targetColumn'])) {
+        // Only with the bundle that brings the widget
+        if (StyleGroups::INPUT_TYPE === $config['inputType'] && !isset($GLOBALS['BE_FFL'][StyleGroups::INPUT_TYPE])) {
+            return false;
+        }
+
+        // Columns, or fields stored in a column for several of them (see VirtualFields)
+        if ((!isset($config['sql']) && !isset($config['targetColumn'])) || isset($config['input_field_callback'])) {
             return false;
         }
 
         $eval = $config['eval'] ?? [];
 
-        if (isset($eval['virtualTarget'])) {
+        // The storage of the virtual fields is not edited as a whole
+        if (!empty($config['virtualTarget']) || isset($eval['virtualTarget'])) {
             return false;
         }
 
@@ -64,8 +72,8 @@ final class FieldPolicy
             return false;
         }
 
-        // Date values need a format conversion in DC_Table
-        if (\in_array($eval['rgxp'] ?? null, ['date', 'time', 'datim'], true)) {
+        // Dates are stored as timestamps, see DateValue: only in a single text field
+        if (\in_array($eval['rgxp'] ?? null, DateValue::RGXPS, true) && ('text' !== $config['inputType'] || !empty($eval['multiple']))) {
             return false;
         }
 

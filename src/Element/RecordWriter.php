@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Pdir\ContaoBlockEditorBundle\Element;
 
 use Contao\CoreBundle\Exception\ResponseException;
+use Contao\Date;
 use Contao\StringUtil;
 use Contao\System;
 use Contao\Widget;
 use Doctrine\DBAL\Exception as DbalException;
+use Pdir\ContaoBlockEditorBundle\DataContainer\DateValue;
 use Pdir\ContaoBlockEditorBundle\DataContainer\EditorDataContainer;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -82,17 +84,39 @@ final class RecordWriter
             throw new ApiException(400, 'Dieses Feld wird nicht unterstützt.');
         }
 
+        $rgxp = DateValue::isDate($config) ? (string) $config['eval']['rgxp'] : null;
+
+        // The widget validates the date in the format of the settings, as typed in the back end
+        if (null !== $rgxp && '' !== $value) {
+            $timestamp = DateValue::fromInput($value, $rgxp);
+
+            if (null === $timestamp) {
+                throw new ApiException(400, 'Ungültiges Datum.');
+            }
+
+            $value = Date::parse(Date::getFormatFromRgxp($rgxp), $timestamp);
+        }
+
         $dc->setField($field);
+        $attributes = $class::getAttributesFromDca($config, $field, $row[$field] ?? null, $field, $table, $dc);
+
+        // The style selector takes the chosen styles by group
+        if (StyleGroups::INPUT_TYPE === $config['inputType']) {
+            if (!array_is_list($value) || array_filter($value, static fn (mixed $style): bool => !\is_string($style))) {
+                throw new ApiException(400, 'Ungültige Auswahl.');
+            }
+
+            $value = StyleGroups::toWidgetInput($value, $attributes['options'] ?? []);
+        }
 
         /** @var Widget $widget */
-        $widget = new $class($class::getAttributesFromDca($config, $field, $row[$field] ?? null, $field, $table, $dc));
+        $widget = new $class($attributes);
 
         // Widgets read the request's POST data; that path applies the core's encoding and
         // HTML sanitizing in each Contao version. Input::setPost() would not work here:
         // Contao 6 widgets without HTML ignore it and would save an empty value.
         $post = $this->requestStack->getCurrentRequest()?->request ?? throw new \LogicException('No current request.');
-        $post->set($field, \is_bool($value) ? ($value ? '1' : '') : $value);
-        $widget->validate();
+        $post->set($field, \is_bool($value) ? ($value ? '1' : '') : $value);        $widget->validate();
         $post->remove($field);
 
         if ($widget->hasErrors()) {
@@ -101,9 +125,21 @@ final class RecordWriter
 
         $newValue = $widget->value;
 
-        // Fail closed: a value must never silently turn into an empty one
-        if (\in_array($newValue, ['', null], true) && !\in_array($value, ['', false, []], true)) {
+        // Fail closed: a value must never silently turn into an empty one. No style chosen in
+        // any group is an empty choice as well.
+        $sentEmpty = \in_array($value, ['', false, []], true) || (StyleGroups::INPUT_TYPE === $config['inputType'] && !array_filter($value));
+
+        if (\in_array($newValue, ['', null], true) && !$sentEmpty) {
             throw new ApiException(422, 'Der Wert konnte nicht übernommen werden.');
+        }
+
+        // Stored as a timestamp, as DC_Table does before the save callbacks
+        if (null !== $rgxp && '' !== (string) $newValue) {
+            try {
+                $newValue = (new Date((string) $newValue, Date::getFormatFromRgxp($rgxp)))->tstamp;
+            } catch (\Exception) {
+                throw new ApiException(422, 'Ungültiges Datum.');
+            }
         }
 
         try {
@@ -129,7 +165,8 @@ final class RecordWriter
                 return ['save' => false, 'value' => null];
             }
 
-            $newValue = Widget::getEmptyValueByFieldType($config['sql']);
+            // Virtual fields have no column of their own
+            $newValue = Widget::getEmptyValueByFieldType($config['sql'] ?? []);
         }
 
         return ['save' => true, 'value' => $newValue];

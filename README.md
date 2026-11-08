@@ -51,6 +51,10 @@ Beschreibungslisten wie Kennzahlen oder Zeitleisten lassen sich Begriff für Beg
 Begriff zur Beschreibung und weiter zu einem neuen Eintrag.
 Mehrzeilige Textfelder ohne Editor, etwa der Badge-Text im Hero, werden ebenfalls in der Seite bearbeitet:
 Umschalt + Enter beginnt eine neue Zeile, Enter beendet die Eingabe. Danach zeigt das Template die Zeilen wieder an.
+Datumsfelder wie „Anzeigen ab/bis“ nutzen die Datumsauswahl des Browsers. Felder, die Contao in einer gemeinsamen
+JSON-Spalte speichert (z. B. „Serverseitiger Seitenumbruch“ der Galerie), bearbeitet der Inspector wie andere Felder.
+Felder, die andere Bundles erst beim Bearbeiten in die Paletten aufnehmen (ihre `onload_callback`), erscheinen
+ebenfalls, etwa „Erweiterte CSS-Klassen“. Die „CSS-Stil Auswahl“ des CSS Style Selector zeigt je Stilgruppe eine Auswahl.
 „Löschen“ im Inspector entfernt das gewählte Element samt verschachtelter Elemente, wenn der Benutzer es löschen darf.
 Wie im Backend landet es in „Wiederherstellen“; direkt danach holt „Rückgängig“ in der Kopfzeile es zurück.
 Mit dem Stift in der Kopfzeile oder der Taste `E` lässt sich das Bearbeiten ausschalten, um sich nur auf der Seite zu

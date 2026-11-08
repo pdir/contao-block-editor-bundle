@@ -10,7 +10,9 @@ use Contao\CoreBundle\Security\DataContainer\UpdateAction;
 use Contao\DataContainer;
 use Contao\Versions;
 use Doctrine\DBAL\Connection;
+use Pdir\ContaoBlockEditorBundle\DataContainer\EditContext;
 use Pdir\ContaoBlockEditorBundle\DataContainer\EditorDataContainer;
+use Pdir\ContaoBlockEditorBundle\DataContainer\VirtualFields;
 use Pdir\ContaoBlockEditorBundle\Exception\ApiException;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -84,7 +86,19 @@ final class ElementUpdater
             throw new ApiException(409, 'Das Element wurde zwischenzeitlich geändert. Bitte die Seite neu laden.');
         }
 
+        // Virtual fields as fields of the record, see VirtualFields
+        $record = VirtualFields::expand($row, self::TABLE);
+        $dc = new EditorDataContainer(self::TABLE, $record);
+
+        // As for the edit form of the back end: other bundles add their fields to the palettes here
+        EditContext::load(self::TABLE, $dc, $this->requestStack->getCurrentRequest());
+
         $allowed = $this->inspector->getEditableFields($row);
+
+        $this->requestStack->getCurrentRequest()?->request->set('FORM_SUBMIT', self::TABLE);
+
+        $submit = [];
+        $errors = [];
 
         foreach (array_keys($values) as $field) {
             if (!\in_array($field, $allowed, true)) {
@@ -93,25 +107,9 @@ final class ElementUpdater
             }
         }
 
-        $dc = new EditorDataContainer(self::TABLE, $row);
-
-        $this->writer->runRecordCallbacks(self::TABLE, 'onload_callback', $dc);
-
-        // Callbacks may have adjusted the DCA for this record, so check again
-        $allowed = $this->inspector->getEditableFields($row);
-
-        $this->requestStack->getCurrentRequest()?->request->set('FORM_SUBMIT', self::TABLE);
-
-        $submit = [];
-        $errors = [];
-
         foreach ($values as $field => $value) {
-            if (!\in_array($field, $allowed, true)) {
-                throw new ApiException(403, 'Dieses Feld darf hier nicht bearbeitet werden.', ['field' => (string) $field]);
-            }
-
             try {
-                $validated = $this->writer->validateField(self::TABLE, $field, $value, $row, $dc);
+                $validated = $this->writer->validateField(self::TABLE, $field, $value, $record, $dc);
 
                 if ($validated['save']) {
                     $submit[$field] = $validated['value'];
@@ -134,7 +132,7 @@ final class ElementUpdater
         }
 
         $submit['tstamp'] = time();
-        $submit = $this->writer->runBeforeSubmitCallbacks(self::TABLE, $submit, $dc);
+        $submit = VirtualFields::combine($this->writer->runBeforeSubmitCallbacks(self::TABLE, $submit, $dc), $row, self::TABLE);
 
         // The voters get to see the new values, e.g. to deny a forbidden element type
         $this->denyUnlessGranted(new UpdateAction(self::TABLE, $row, $submit));
@@ -155,7 +153,7 @@ final class ElementUpdater
 
         \assert(\is_array($updated));
 
-        $dc = new EditorDataContainer(self::TABLE, $updated);
+        $dc = new EditorDataContainer(self::TABLE, VirtualFields::expand($updated, self::TABLE));
 
         $this->writer->runRecordCallbacks(self::TABLE, 'onsubmit_callback', $dc);
         $dc->invalidateCacheTags();
@@ -174,7 +172,10 @@ final class ElementUpdater
             'values' => (array) ($this->inspector->getElements([$id])[$id]['values'] ?? []),
         ];
 
-        if ($changed = self::changedBySideEffect($row, $final, array_keys($values))) {
+        // The storage of a virtual field changes with it
+        $sent = [...array_keys($values), ...VirtualFields::storagesOf(array_keys($values), self::TABLE)];
+
+        if ($changed = self::changedBySideEffect($row, $final, $sent)) {
             // Callbacks are allowed to do this, but it must not go unnoticed
             $this->logger->warning('Saving a content element also changed other fields.', ['id' => $id, 'sent' => array_keys($values), 'changed' => $changed]);
             $result['sideEffects'] = $this->labels($changed);

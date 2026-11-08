@@ -62,7 +62,9 @@ final class ApiController
                 static fn (string $type): bool => 1 === preg_match('/^[a-zA-Z0-9_-]{1,64}$/', $type),
             )));
 
-            $response = $this->json(['types' => (object) $this->inspector->getSchema($types)]);
+            // Elements of the page, for the fields that depend on a record
+            $ids = self::parseIds((string) $request->query->get('ids', ''));
+            $response = $this->json(['types' => (object) $this->inspector->getSchema($types, $ids)]);
 
             // The schema depends on the user's permissions, so it may only live in their
             // browser cache and must be revalidated.

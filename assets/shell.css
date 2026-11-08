@@ -614,6 +614,23 @@ body {
   width: 72px;
 }
 
+/* The CSS style selector: one row per style group */
+.cbe-styles {
+  display: grid;
+  gap: 8px;
+}
+
+.cbe-field .cbe-styles__group > label {
+  font-weight: 400;
+}
+
+.cbe-styles__category {
+  color: var(--cbe-muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 4px 0 0;
+}
+
 .cbe-inspector > .cbe-link {
   align-self: flex-start;
   border-top: 0;
