@@ -10,6 +10,7 @@ use Contao\CoreBundle\Security\Authentication\Token\TokenChecker;
 use Contao\PageModel;
 use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Pdir\ContaoBlockEditorBundle\Record\ReaderRecord;
+use Pdir\ContaoBlockEditorBundle\Record\ShownTexts;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
@@ -30,6 +31,7 @@ final class EditorFrameListener
         private readonly TokenChecker $tokenChecker,
         private readonly EditorAssets $assets,
         private readonly ReaderRecord $records,
+        private readonly ShownTexts $shownTexts,
     ) {
     }
 
@@ -154,6 +156,11 @@ final class EditorFrameListener
         // The news or event of a reader module, whose headline is no content element
         if ($record = $this->records->find($request, $content)) {
             $attributes .= ' data-cbe-record="'.$record['table'].'.'.$record['id'].'" data-cbe-record-scope="'.$record['scope'].'"';
+        }
+
+        // Dates and times as the templates show them, see EventListListener
+        if ($shown = $this->shownTexts->all()) {
+            $attributes .= ' data-cbe-shown="'.htmlspecialchars(json_encode($shown, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE), ENT_QUOTES).'"';
         }
 
         $tags = '<link rel="stylesheet" href="'.$url('frame.css').'"'.$nonceAttribute.'>';

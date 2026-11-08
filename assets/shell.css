@@ -544,6 +544,11 @@ body {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+/* A field that a checkbox shows, such as the times of an event */
+.cbe-field[hidden] {
+  display: none;
+}
+
 .cbe-field--switch label {
   cursor: pointer;
   margin: 0;

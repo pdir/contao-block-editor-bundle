@@ -1539,7 +1539,7 @@ document.addEventListener('pointerdown', (event) => {
       const link = field.closest<HTMLAnchorElement>('a[href]');
 
       if (link && onText) {
-        showNavActions(link, field.hasAttribute('data-cbe-editable'), 'Den Titel direkt hier ändern', true);
+        showNavActions(link, field.hasAttribute('data-cbe-editable'), record.isFormatted(field) ? 'Datum und Uhrzeit im Inspector ändern' : 'Den Titel direkt hier ändern', true);
       }
     }
 
@@ -1629,7 +1629,7 @@ record = new RecordFields((node, scope) => {
   const owner = closestId(node)?.root;
 
   return Boolean(owner && owner !== scope && scope.contains(owner));
-}, toShell);
+}, toShell, shownTexts(script));
 
 /** A link of the navigation still leads to its page, from the bar above it. */
 function showNavActions(link: HTMLAnchorElement, editable: boolean, hint = 'Den Namen direkt im Menü ändern', above = false): void {
@@ -1650,20 +1650,43 @@ function showNavActions(link: HTMLAnchorElement, editable: boolean, hint = 'Den 
 
 const framePage: FramePage | null = script?.dataset.cbePageId ? { id: Number(script.dataset.cbePageId), title: script.dataset.cbePageTitle ?? '' } : null;
 /** The news of the lists on the page, marked by the server (see NewsListListener). */
-function listedNews(): FrameRecord[] {
-  const ids = new Set<number>();
+/** The news and events of lists on the page, marked by the server (NewsListListener, EventListListener). */
+function listedRecords(): FrameRecord[] {
+  const found = new Map<string, FrameRecord>();
+  const tables: Record<string, string> = { news: 'tl_news', event: 'tl_calendar_events' };
 
-  for (const news of document.querySelectorAll('[class*="cbe-news-"]')) {
-    for (const name of news.classList) {
-      const id = /^cbe-news-(\d+)$/.exec(name)?.[1];
+  for (const item of document.querySelectorAll('[class*="cbe-news-"], [class*="cbe-event-"]')) {
+    for (const name of item.classList) {
+      const [, kind, id] = /^cbe-(news|event)-(\d+)$/.exec(name) ?? [];
+      const table = tables[kind];
 
-      if (id && !(frameRecord?.table === 'tl_news' && frameRecord.id === Number(id))) {
-        ids.add(Number(id));
+      if (table && !(frameRecord?.table === table && frameRecord.id === Number(id))) {
+        found.set(`${table}.${id}`, { table, id: Number(id), scope: `.${name}` });
       }
     }
   }
 
-  return [...ids].slice(0, 50).map((id) => ({ table: 'tl_news', id, scope: `.cbe-news-${id}` }));
+  return [...found.values()].slice(0, 50);
+}
+
+/** How the templates show the dates and times of events, see ShownTexts. */
+function shownTexts(source: HTMLScriptElement | null): Record<string, Record<string, string>> {
+  try {
+    return JSON.parse(source?.dataset.cbeShown ?? '{}') as Record<string, Record<string, string>>;
+  } catch {
+    return {};
+  }
+}
+
+/** After a save, the page as rendered now tells how the template shows the fields. */
+async function refreshShown(key: string): Promise<void> {
+  const response = await fetch(window.location.href, { headers: { Accept: 'text/html' }, cache: 'no-store' });
+
+  if (response.ok) {
+    const fresh = new DOMParser().parseFromString(await response.text(), 'text/html');
+
+    record?.updateShown(shownTexts(fresh.querySelector<HTMLScriptElement>('script[data-cbe-preview]')), key);
+  }
 }
 
 const [recordTable, recordId] = (script?.dataset.cbeRecord ?? '').split('.');
@@ -2033,6 +2056,9 @@ window.addEventListener('message', (event) => {
     case 'cbe:record-value':
       record?.setValue(message.key, message.field, message.value);
       break;
+    case 'cbe:record-shown':
+      void refreshShown(message.key);
+      break;
     case 'cbe:picked':
       if (message.value !== null) {
         picked?.(message.value);
@@ -2063,7 +2089,7 @@ window.addEventListener('message', (event) => {
 function announce(): void {
   const ids = Array.from(document.querySelectorAll(`[${ID_ATTRIBUTE}]`), (node) => Number(node.getAttribute(ID_ATTRIBUTE)));
   // The time origin identifies this document: the shell may get several announcements
-  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)], record: frameRecord, records: listedNews() });
+  toShell({ type: 'cbe:ready', load: performance.timeOrigin, page: framePage, ids: [...new Set(ids)], record: frameRecord, records: listedRecords() });
 }
 
 announce();

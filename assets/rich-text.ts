@@ -4,7 +4,7 @@
 import { Editor, Extension, Mark, mergeAttributes, Node, type AnyExtension, type EditorOptions } from '@tiptap/core';
 import Link from '@tiptap/extension-link';
 import StarterKit from '@tiptap/starter-kit';
-import { ICONS, iconElement } from './editor-icons';
+import { FORMAT_ICONS as ICONS, iconElement } from './editor-icons';
 import type { BarAnchor, EditOptions, LinkBar } from './link-bar';
 import { compactListItems, isSafeLink, normalizeLinkInput } from './rich-text-policy';
 

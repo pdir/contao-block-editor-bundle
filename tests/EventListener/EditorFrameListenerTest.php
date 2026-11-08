@@ -11,6 +11,7 @@ use Doctrine\DBAL\Connection;
 use Pdir\ContaoBlockEditorBundle\Element\EditorAssets;
 use Pdir\ContaoBlockEditorBundle\EventListener\EditorFrameListener;
 use Pdir\ContaoBlockEditorBundle\Record\ReaderRecord;
+use Pdir\ContaoBlockEditorBundle\Record\ShownTexts;
 use Pdir\ContaoBlockEditorBundle\Security\FieldPolicy;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
@@ -152,7 +153,7 @@ final class EditorFrameListenerTest extends TestCase
             $this->createStub(RouterInterface::class),
         );
 
-        return new EditorFrameListener($stack, $tokenChecker, new EditorAssets('/tmp'), $records);
+        return new EditorFrameListener($stack, $tokenChecker, new EditorAssets('/tmp'), $records, new ShownTexts());
     }
 
     private function event(Request $request, Response $response): ResponseEvent

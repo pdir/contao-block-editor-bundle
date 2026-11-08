@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
-import { findByText, TEXT_RUN_TAG, wrapTextRun } from './text-target';
+import { findByText, TEXT_RUN_TAG, wrapTextPart, wrapTextRun } from './text-target';
 
 describe('findByText', () => {
   let root: HTMLElement;
@@ -69,5 +69,28 @@ describe('wrapTextRun', () => {
     expect(wrapTextRun(root, 'Mehr als')).toBeNull();
     expect(wrapTextRun(root, 'Allein', (element) => !element.matches('.no'))).toBeNull();
     expect(root.innerHTML).toBe('<p>Mehr als ein <b>Theme</b></p><p class="no">Allein</p>');
+  });
+});
+
+describe('wrapTextPart', () => {
+  it('wraps the date and the time of a line written from several fields', () => {
+    const root = document.createElement('p');
+    root.innerHTML = 'Montag, 23.11.2026 · 17:00–19:00';
+
+    const date = wrapTextPart(root, '23.11.2026');
+    const time = wrapTextPart(root, '17:00–19:00');
+
+    expect(date?.tagName.toLowerCase()).toBe(TEXT_RUN_TAG);
+    expect(date?.textContent).toBe('23.11.2026');
+    expect(time?.textContent).toBe('17:00–19:00');
+    expect(root.textContent).toBe('Montag, 23.11.2026 · 17:00–19:00');
+  });
+
+  it('leaves hidden and already wrapped text alone', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<span aria-hidden="true">23.11.2026</span><p>am 23.11.2026</p>';
+
+    expect(wrapTextPart(root, '23.11.2026')?.parentElement?.tagName).toBe('P');
+    expect(wrapTextPart(root, '23.11.2026')).toBeNull();
   });
 });

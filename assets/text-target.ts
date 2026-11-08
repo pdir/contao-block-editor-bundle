@@ -57,3 +57,37 @@ export function wrapTextRun(scope: HTMLElement, text: string, accepts: (element:
 
   return null;
 }
+
+/**
+ * Part of a text, such as the date in "Montag, 23.11.2026 · 17:00–19:00", which a template
+ * writes from several fields into one line. The first occurrence gets a tag of its own.
+ */
+export function wrapTextPart(scope: HTMLElement, text: string, accepts: (element: HTMLElement) => boolean = () => true): HTMLElement | null {
+  const wanted = normalized(text);
+
+  if (!wanted) {
+    return null;
+  }
+
+  const walker = scope.ownerDocument.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const parent = node.parentElement;
+    const at = node.data.indexOf(wanted);
+
+    if (at < 0 || !parent || parent.matches(`script, style, [aria-hidden="true"], ${TEXT_RUN_TAG}`) || !accepts(parent)) {
+      continue;
+    }
+
+    const part = node.splitText(at);
+    part.splitText(wanted.length);
+
+    const wrapper = scope.ownerDocument.createElement(TEXT_RUN_TAG);
+    part.replaceWith(wrapper);
+    wrapper.append(part);
+
+    return wrapper;
+  }
+
+  return null;
+}

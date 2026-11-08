@@ -33,7 +33,10 @@ für Seiten aus dem Backend, gespeichert wird mit Versionierung wie bei den Elem
 Auf der Detailseite einer Nachricht oder eines Events lassen sich der Titel (bei Nachrichten auch die Unterüberschrift)
 direkt in der Seite und im Inspector ändern, mit den Rechten und der Versionierung des Backends. In Nachrichtenlisten
 gilt das für Titel und Teaser jedes Beitrags; ein Teaser aus einem einzigen Absatz wird direkt in der Liste bearbeitet,
-längere mit Formatierung im Inspector. Ist kein Element
+längere mit Formatierung im Inspector. Bei Events, in Terminlisten und auf der Detailseite, kommen Ort, Teaser, Start- und
+Enddatum, „Zeit hinzufügen“ und die Uhrzeiten dazu. Datum und Uhrzeit formatiert das Template für die Seite: Ein Klick
+darauf öffnet das Feld mit der Datumsauswahl des Browsers im Inspector, nach dem Speichern zeigt die Seite die neue
+Angabe. Ist kein Element
 ausgewählt, zeigt der Inspector Seitentitel und Beschreibung der aktuellen Seite für Suchmaschinen; sie werden ebenso
 gespeichert.
 Neue Elemente kommen über das Plus unter dem Griff oder den Button „Element darunter einfügen“ im Inspector unter das

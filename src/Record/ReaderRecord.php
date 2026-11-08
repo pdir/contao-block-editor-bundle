@@ -12,6 +12,8 @@ use Contao\CoreBundle\Security\DataContainer\UpdateAction;
 use Contao\StringUtil;
 use Contao\System;
 use Doctrine\DBAL\Connection;
+use Pdir\ContaoBlockEditorBundle\DataContainer\DateValue;
+use Pdir\ContaoBlockEditorBundle\DataContainer\EditorDataContainer;
 use Pdir\ContaoBlockEditorBundle\Element\ElementInspector;
 use Pdir\ContaoBlockEditorBundle\Security\FieldPolicy;
 use Symfony\Bundle\SecurityBundle\Security;
@@ -34,7 +36,7 @@ final class ReaderRecord
      */
     public const READERS = [
         'tl_news' => ['class' => 'mod_newsreader', 'module' => 'news', 'model' => 'Contao\NewsModel', 'label' => 'Nachricht', 'fields' => ['headline', 'subheadline', 'teaser'], 'fallbacks' => []],
-        'tl_calendar_events' => ['class' => 'mod_eventreader', 'module' => 'calendar', 'model' => 'Contao\CalendarEventsModel', 'label' => 'Event', 'fields' => ['title'], 'fallbacks' => []],
+        'tl_calendar_events' => ['class' => 'mod_eventreader', 'module' => 'calendar', 'model' => 'Contao\CalendarEventsModel', 'label' => 'Event', 'fields' => ['title', 'addTime', 'startDate', 'endDate', 'startTime', 'endTime', 'location', 'teaser'], 'fallbacks' => []],
         // Without a page title, Contao shows the name of the page
         'tl_page' => ['class' => null, 'module' => 'page', 'model' => 'Contao\PageModel', 'label' => 'Seite', 'fields' => ['pageTitle', 'description'], 'fallbacks' => ['pageTitle' => 'title']],
     ];
@@ -113,19 +115,26 @@ final class ReaderRecord
         }
 
         $editable = $this->isGranted($table, new UpdateAction($table, $row));
+        $dc = new EditorDataContainer($table, $row);
         $fields = [];
 
         foreach ($this->fields($table) as $field) {
+            $config = $GLOBALS['TL_DCA'][$table]['fields'][$field];
             $fallback = self::READERS[$table]['fallbacks'][$field] ?? null;
+            $date = DateValue::isDate($config) ? (string) $config['eval']['rgxp'] : null;
+            $value = null === $date ? $row[$field] : DateValue::toInput($this->loaded($dc, $field, $config, $row[$field]), $date);
 
             $fields[] = [
                 'name' => $field,
                 'label' => $this->label($table, $field),
-                'value' => StringUtil::convertBasicEntities((string) $row[$field]),
+                'value' => 'checkbox' === $config['inputType'] ? ($value ? '1' : '') : StringUtil::convertBasicEntities((string) $value),
                 'editable' => $editable && $this->fieldPolicy->canEdit($table, $field),
-                'multiline' => 'textarea' === ($GLOBALS['TL_DCA'][$table]['fields'][$field]['inputType'] ?? null),
-                'rich' => isset($GLOBALS['TL_DCA'][$table]['fields'][$field]['eval']['rte']),
+                'multiline' => 'textarea' === $config['inputType'],
+                'rich' => isset($config['eval']['rte']),
                 'placeholder' => null === $fallback ? '' : StringUtil::convertBasicEntities((string) $row[$fallback]),
+                ...(null === $date ? [] : ['date' => $date]),
+                ...('checkbox' === $config['inputType'] ? ['checkbox' => true] : []),
+                ...(null === ($selector = $this->selector($table, $field)) ? [] : ['subpalette' => $selector]),
             ];
         }
 
@@ -160,6 +169,42 @@ final class ReaderRecord
     public function isGranted(string $table, ReadAction|UpdateAction $action): bool
     {
         return $this->security->isGranted(ContaoCorePermissions::DC_PREFIX.$table, $action);
+    }
+
+    /**
+     * The value as the back end shows it: an event's end time is empty if it equals the start.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function loaded(EditorDataContainer $dc, string $field, array $config, mixed $value): mixed
+    {
+        $dc->setField($field);
+
+        try {
+            foreach ($config['load_callback'] ?? [] as $callback) {
+                $value = \is_array($callback)
+                    ? System::importStatic($callback[0])->{$callback[1]}($value, $dc)
+                    : $callback($value, $dc);
+            }
+        } catch (\Throwable) {
+            // The stored value is still the right one to show
+        }
+
+        return $value;
+    }
+
+    /**
+     * The checkbox that shows the field, such as "Zeit hinzufügen" for the times of an event.
+     */
+    private function selector(string $table, string $field): string|null
+    {
+        foreach ($GLOBALS['TL_DCA'][$table]['subpalettes'] ?? [] as $selector => $palette) {
+            if (\is_string($palette) && \in_array($field, FieldPolicy::paletteFields($palette), true)) {
+                return (string) $selector;
+            }
+        }
+
+        return null;
     }
 
     private function label(string $table, string $field): string

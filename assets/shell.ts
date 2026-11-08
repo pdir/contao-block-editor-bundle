@@ -1,4 +1,4 @@
-import { ICONS, iconElement } from './editor-icons';
+import { FORMAT_ICONS, iconElement } from './editor-icons';
 import { frameUrl, isFrameUrl, pagePath, publicUrl, type FramePaths } from './navigation';
 import type { RichField } from './rich-editor';
 import type { FrameElement, FramePage, FrameRecord, InlineConfig, ToFrame, ToShell, MovePosition, InsertPlace } from './protocol';
@@ -1017,7 +1017,7 @@ function richControl(source: string, label: string, textarea: HTMLTextAreaElemen
   host.hidden = true;
   toggle.type = 'button';
   toggle.className = 'cbe-rich__toggle';
-  toggle.append(iconElement(document, ICONS.source));
+  toggle.append(iconElement(document, FORMAT_ICONS.source));
   toggle.hidden = true;
   box.append(host, textarea, toggle);
 
@@ -1078,7 +1078,8 @@ function richControl(source: string, label: string, textarea: HTMLTextAreaElemen
   return { root: box, set };
 }
 
-function renderInspector(): void {
+/** The field clicked in the page that only the inspector edits, such as the date of an event. */
+function renderInspector(focusField?: string): void {
   inspector.replaceChildren();
   richFields.splice(0).forEach((field) => field.destroy());
   tooltip.hidden = true;
@@ -1097,6 +1098,10 @@ function renderInspector(): void {
       if (selectedRecord === shownRecord && selected === null) {
         inspector.replaceChildren();
         loaded.render(inspector);
+
+        if (focusField) {
+          loaded.focus(focusField);
+        }
       }
     });
 
@@ -1230,7 +1235,7 @@ window.addEventListener('message', (event) => {
       selected = null;
       selectedPage = null;
       selectedRecord = message.key;
-      renderInspector();
+      renderInspector(message.field);
       break;
     case 'cbe:record-change':
       void records.get(message.key)?.then((record) => record.change(message.field, message.value, 'page'));
@@ -1444,7 +1449,7 @@ function setEditing(enabled: boolean): void {
 editToggle.addEventListener('click', () => setEditing(!editing));
 
 /** One that is still being saved keeps its queue until done. */
-function setupRecord(previous: Promise<ReaderRecord> | null | undefined, record: FrameRecord, options: Pick<ReaderRecordOptions, 'post' | 'hint' | 'lengths' | 'rich'>): Promise<ReaderRecord> {
+function setupRecord(previous: Promise<ReaderRecord> | null | undefined, record: FrameRecord, options: Pick<ReaderRecordOptions, 'post' | 'hint' | 'lengths' | 'rich' | 'onFormattedSaved'>): Promise<ReaderRecord> {
   return (import(readerRecordUrl) as Promise<typeof import('./reader-record')>).then(async ({ setupReaderRecord }) => {
     await previous?.then((loaded) => loaded.settle());
 
@@ -1463,9 +1468,17 @@ function loadRecords(reader: FrameRecord | null, listed: FrameRecord[]): void {
 
   for (const record of reader ? [reader, ...listed] : listed) {
     const key = recordKey(record);
-    const hint = `${record === reader ? 'Auch direkt in der Seite' : 'Titel und Teaser auch direkt in der Liste'} änderbar. Weitere Angaben im klassischen Backend.`;
+    const event = record.table === 'tl_calendar_events';
+    const hint = record === reader
+      ? `Auch direkt in der Seite änderbar${event ? ', Datum und Uhrzeit per Klick darauf' : ''}. Weitere Angaben im klassischen Backend.`
+      : `Titel und Teaser auch direkt in der Liste änderbar${event ? ', Datum und Uhrzeit per Klick darauf' : ''}. Weitere Angaben im klassischen Backend.`;
 
-    records.set(key, setupRecord(previous.get(key), record, { post, hint, rich: (source, textarea, label, change) => richControl(source, label, textarea, (value) => change(String(value))) }));
+    records.set(key, setupRecord(previous.get(key), record, {
+      post,
+      hint,
+      onFormattedSaved: () => post({ type: 'cbe:record-shown', key }),
+      rich: (source, textarea, label, change) => richControl(source, label, textarea, (value) => change(String(value))),
+    }));
   }
 }
 

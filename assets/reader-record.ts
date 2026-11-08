@@ -14,6 +14,11 @@ interface RecordField {
   rich?: boolean;
   /** Shown while the field is empty: what Contao uses instead. */
   placeholder: string;
+  /** A date, a time or both, typed in the browser's own field. */
+  date?: 'date' | 'time' | 'datim';
+  checkbox?: boolean;
+  /** The checkbox that shows the field, such as "Zeit hinzufügen" for the times of an event. */
+  subpalette?: string;
 }
 
 interface RecordData {
@@ -36,6 +41,8 @@ export interface ReaderRecordOptions {
   hint?: string;
   /** The number of characters that search engines show, by field. */
   lengths?: Record<string, number>;
+  /** After a save of fields that the page shows formatted, such as the date of an event. */
+  onFormattedSaved?: () => void;
   /** The editor for formatted text around the text area, from the shell. */
   rich?: (source: string, textarea: HTMLTextAreaElement, label: string, change: (html: string) => void) => { root: HTMLElement; set(html: string): void };
 }
@@ -44,6 +51,8 @@ export class ReaderRecord {
   private data: RecordData | null = null;
   private readonly queue: SaveQueue;
   private readonly inputs = new Map<string, HTMLInputElement | HTMLTextAreaElement>();
+  /** The fields that a checkbox shows, by checkbox. */
+  private readonly subpalettes = new Map<string, HTMLElement[]>();
   private readonly counts = new Map<string, HTMLElement>();
   private readonly richSync = new Map<string, (html: string) => void>();
   /** The texts as typed, which the inspector shows again when it opens. */
@@ -66,6 +75,10 @@ export class ReaderRecord {
         }
 
         this.data = data;
+
+        if (Object.keys(values).some((name) => data.fields.some((field) => field.name === name && (field.date || field.checkbox)))) {
+          options.onFormattedSaved?.();
+        }
 
         return { revision: data.revision, values: Object.fromEntries(data.fields.map(({ name, value }) => [name, value])) };
       },
@@ -124,7 +137,10 @@ export class ReaderRecord {
 
     const input = this.inputs.get(field);
 
-    if (input && input.value !== value) {
+    if (input instanceof HTMLInputElement && input.type === 'checkbox') {
+      input.checked = value === '1';
+      this.showSubpalette(field);
+    } else if (input && input.value !== value) {
       input.value = value;
 
       if (origin !== 'inspector') {
@@ -146,6 +162,20 @@ export class ReaderRecord {
     }
   }
 
+  /** Only with the checkbox on, as in the back end. */
+  private showSubpalette(selector: string): void {
+    const on = this.values.get(selector) === '1';
+
+    for (const field of this.subpalettes.get(selector) ?? []) {
+      field.hidden = !on;
+    }
+  }
+
+  /** Clicked in the page, where the field is shown formatted, such as the date of an event. */
+  focus(field: string): void {
+    this.inputs.get(field)?.focus();
+  }
+
   get pending(): boolean {
     return this.queue.pending;
   }
@@ -160,6 +190,7 @@ export class ReaderRecord {
 
   forget(): void {
     this.inputs.clear();
+    this.subpalettes.clear();
     this.counts.clear();
     this.richSync.clear();
   }
@@ -177,10 +208,10 @@ export class ReaderRecord {
     heading.textContent = data.label;
     container.append(heading);
 
-    for (const { name, label: text, value, editable, multiline, rich, placeholder } of data.fields) {
+    for (const { name, label: text, value, editable, multiline, rich, placeholder, date, checkbox, subpalette } of data.fields) {
       const id = `cbe-record-${name}`;
       const field = document.createElement('div');
-      field.className = 'cbe-field';
+      field.className = checkbox ? 'cbe-field cbe-field--switch' : 'cbe-field';
 
       const label = document.createElement('label');
       label.htmlFor = id;
@@ -188,10 +219,28 @@ export class ReaderRecord {
 
       const input = document.createElement(multiline ? 'textarea' : 'input');
       input.id = id;
-      input.value = this.values.get(name) ?? value;
-      input.placeholder = placeholder ?? '';
-      input.readOnly = !editable;
-      input.addEventListener('input', () => this.change(name, input.value, 'inspector'));
+
+      if (input instanceof HTMLInputElement && checkbox) {
+        input.type = 'checkbox';
+        input.checked = (this.values.get(name) ?? value) === '1';
+        input.disabled = !editable;
+        input.addEventListener('change', () => this.change(name, input.checked ? '1' : '', 'inspector'));
+      } else if (input instanceof HTMLInputElement && date) {
+        // The browser's own picker; saved once the date is complete, not with each digit
+        input.type = { date: 'date', time: 'time', datim: 'datetime-local' }[date];
+        input.value = this.values.get(name) ?? value;
+        input.readOnly = !editable;
+        input.addEventListener('change', () => this.change(name, input.value, 'inspector'));
+      } else {
+        input.value = this.values.get(name) ?? value;
+        input.placeholder = placeholder ?? '';
+        input.readOnly = !editable;
+        input.addEventListener('input', () => this.change(name, input.value, 'inspector'));
+      }
+
+      if (subpalette) {
+        this.subpalettes.set(subpalette, [...(this.subpalettes.get(subpalette) ?? []), field]);
+      }
 
       if (input instanceof HTMLTextAreaElement) {
         input.rows = 4;
@@ -218,6 +267,10 @@ export class ReaderRecord {
 
       container.append(field);
       this.inputs.set(name, input);
+    }
+
+    for (const selector of this.subpalettes.keys()) {
+      this.showSubpalette(selector);
     }
 
     if (this.options.hint) {

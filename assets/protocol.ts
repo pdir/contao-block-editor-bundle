@@ -55,6 +55,9 @@ export interface RecordField {
   editable: boolean;
   /** Formatted text: edited in the page only if it is a single paragraph. */
   rich?: boolean;
+  /** Shown formatted for the page, so only found by the text the template wrote. */
+  date?: string;
+  checkbox?: boolean;
 }
 
 /** Where a new element went: next to another one or into an empty article. */
@@ -86,7 +89,9 @@ export type ToFrame =
   | { type: 'cbe:nav-pages'; pages: NavPage[] }
   | { type: 'cbe:page-title'; id: number; title: string }
   | { type: 'cbe:record'; key: string; scope: string; fields: RecordField[] }
-  | { type: 'cbe:record-value'; key: string; field: string; value: string };
+  | { type: 'cbe:record-value'; key: string; field: string; value: string }
+  /** Saved fields that the page shows formatted, such as the date of an event. */
+  | { type: 'cbe:record-shown'; key: string };
 
 export type ToShell =
   | { type: 'cbe:ready'; load: number; page: FramePage | null; ids: number[]; record: FrameRecord | null; records: FrameRecord[] }
@@ -107,7 +112,8 @@ export type ToShell =
   | { type: 'cbe:nav-links'; urls: string[] }
   | { type: 'cbe:page-select'; id: number }
   | { type: 'cbe:page-change'; id: number; title: string }
-  | { type: 'cbe:record-select'; key: string }
+  /** With the field clicked in the page that only the inspector edits, such as a date. */
+  | { type: 'cbe:record-select'; key: string; field?: string }
   | { type: 'cbe:record-change'; key: string; field: string; value: string }
   /** Pressed while the page had the focus. */
   | { type: 'cbe:shortcut'; name: Shortcut };

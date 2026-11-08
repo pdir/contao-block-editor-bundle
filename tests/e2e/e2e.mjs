@@ -456,6 +456,48 @@ ok('nav: editor address stays editable',new URL(e.pg.url()).searchParams.get('id
 const be=await e.pg.frameLocator('#cbe-frame').locator('[data-be-id="20"]').boundingBox();await e.pg.mouse.click(be.x+20,be.y+8);await e.pg.waitForTimeout(300);
 ok('nav: editor cannot edit there',await e.pg.frameLocator('#cbe-frame').locator('.ProseMirror').count()==0);
 }
+// events: marked in a list, their date and time open the fields in the inspector and the page follows the save
+if(process.env.E2E_DB_CONTAINER){
+const q=x=>execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-N','-e',x]).toString().trim();
+q(`DELETE FROM tl_page WHERE id IN (6,7);DELETE FROM tl_calendar WHERE id=1;DELETE FROM tl_calendar_events WHERE pid=1;DELETE FROM tl_module WHERE id IN (2,3);DELETE FROM tl_article WHERE id IN (3,4);DELETE FROM tl_content WHERE id IN (50,51);
+INSERT INTO tl_page (id,pid,sorting,tstamp,title,alias,type,language,includeLayout,layout,published,robots) VALUES (6,1,640,1,'Termine','termine','regular','de',1,1,1,'index,follow'),(7,1,768,1,'Termin','termin','regular','de',1,1,1,'index,follow');
+INSERT INTO tl_calendar (id,tstamp,title,jumpTo) VALUES (1,1,'Kalender',7);
+INSERT INTO tl_calendar_events (id,pid,tstamp,title,alias,author,addTime,startTime,endTime,startDate,location,teaser,published) VALUES
+ (1,1,1,'Eroeffnung','eroeffnung',1,1,UNIX_TIMESTAMP('2030-11-23 17:00:00'),UNIX_TIMESTAMP('2030-11-23 19:00:00'),UNIX_TIMESTAMP('2030-11-23'),'Markt','<p>Mit Gaesten.</p>',1),
+ (2,1,1,'Adventsmarkt','adventsmarkt',1,0,UNIX_TIMESTAMP('2030-11-28'),UNIX_TIMESTAMP('2030-11-28')+86399,UNIX_TIMESTAMP('2030-11-28'),'Dom','<p>Ganztags.</p>',1);
+INSERT INTO tl_module (id,pid,tstamp,name,type,cal_calendar,cal_format,cal_order,cal_template) VALUES (2,1,1,'Liste','eventlist','a:1:{i:0;s:1:"1";}','next_all','ascending','event_list'),(3,1,1,'Leser','eventreader','a:1:{i:0;s:1:"1";}','','','event_full');
+INSERT INTO tl_article (id,pid,sorting,tstamp,title,alias,author,inColumn,published) VALUES (3,6,128,1,'A3','a3',1,'main',1),(4,7,128,1,'A4','a4',1,'main',1);
+INSERT INTO tl_content (id,pid,ptable,sorting,tstamp,type,module,headline,cssID) VALUES (50,3,'tl_article',128,1,'module',2,'','a:2:{i:0;s:0:"";i:1;s:0:"";}'),(51,4,'tl_article',128,1,'module',3,'','a:2:{i:0;s:0:"";i:1;s:0:"";}');
+UPDATE tl_page SET dateFormat='d.m.Y',timeFormat='H:i',datimFormat='d.m.Y H:i' WHERE id=1`);
+const ready=()=>p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument?.documentElement?.classList.contains('cbe-ready'),null,{timeout:10000});
+await p.goto(B+'/contao/block-editor?id=6');await ready();
+const fe=p.frameLocator('#cbe-frame');
+const date1=fe.locator('.cbe-event-1 [data-cbe-field="startDate"]');
+await date1.waitFor({timeout:5000}).catch(()=>{});
+ok('events: marked in the list',await fe.locator('.cbe-event-1').count()==1&&await fe.locator('.cbe-event-2').count()==1);
+ok('events: date and time found in one line',(await date1.textContent())=='23.11.2030'&&(await fe.locator('.cbe-event-1 [data-cbe-field="startTime"]').textContent())=='17:00–19:00'&&(await fe.locator('.cbe-event-1 time').textContent()).trim()=='23.11.2030 17:00–19:00',await fe.locator('.cbe-event-1 time').textContent());
+await date1.click();await p.locator('#cbe-record-startDate').waitFor({timeout:3000});
+ok('events: a click on the date focuses it in the inspector',await p.evaluate(()=>document.activeElement?.id)=='cbe-record-startDate'&&await p.locator('#cbe-record-startDate').inputValue()=='2030-11-23'&&await p.locator('#cbe-record-startDate').getAttribute('type')=='date');
+ok('events: times shown with "Zeit hinzufügen"',await p.locator('#cbe-record-startTime').isVisible()&&await p.locator('#cbe-record-endTime').inputValue()=='19:00');
+const savedEvent=id=>p.waitForResponse(r=>r.url().endsWith('/records/tl_calendar_events/'+id)&&r.request().method()=='PATCH',{timeout:8000});
+let we=savedEvent(1);await p.fill('#cbe-record-startDate','2030-11-24');await p.locator('#cbe-record-startDate').dispatchEvent('change');let re=await we;
+ok('events: date saved',re.status()==200&&q("SELECT CONCAT(FROM_UNIXTIME(startDate,'%Y-%m-%d'),' ',FROM_UNIXTIME(startTime,'%Y-%m-%d %H:%i'),' ',FROM_UNIXTIME(endTime,'%H:%i')) FROM tl_calendar_events WHERE id=1")=='2030-11-24 2030-11-24 17:00 19:00',q("SELECT CONCAT(FROM_UNIXTIME(startDate),' ',FROM_UNIXTIME(startTime),' ',FROM_UNIXTIME(endTime)) FROM tl_calendar_events WHERE id=1"));
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument.querySelector('.cbe-event-1 [data-cbe-field="startDate"]')?.textContent=='24.11.2030',null,{timeout:5000}).catch(()=>{});
+ok('events: the page shows the new date',(await date1.textContent())=='24.11.2030',await date1.textContent());
+we=savedEvent(1);await p.fill('#cbe-record-endTime','20:30');await p.locator('#cbe-record-endTime').dispatchEvent('change');re=await we;
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentDocument.querySelector('.cbe-event-1 [data-cbe-field="startTime"]')?.textContent=='17:00–20:30',null,{timeout:5000}).catch(()=>{});
+ok('events: the page shows the new time',re.status()==200&&(await fe.locator('.cbe-event-1 [data-cbe-field="startTime"]').textContent())=='17:00–20:30',await fe.locator('.cbe-event-1 [data-cbe-field="startTime"]').textContent());
+await fe.locator('.cbe-event-2 [data-cbe-field="startDate"]').click();await p.waitForFunction(()=>document.getElementById('cbe-record-title')?.value=='Adventsmarkt',null,{timeout:3000});
+ok('events: all day without times',await p.locator('#cbe-record-startTime').isHidden()&&!(await p.locator('#cbe-record-addTime').isChecked()));
+// the event of a reader page
+await p.goto(B+'/contao/block-editor?id=7');await ready();
+await fe.locator('nav a',{hasText:'Termine'}).first().waitFor();
+await p.evaluate(()=>{document.getElementById('cbe-frame').contentWindow.location.href=document.getElementById('cbe-frame').contentWindow.location.href.replace(/termin\.html.*$/,'termin/eroeffnung.html?_block_editor=1')});
+await p.waitForFunction(()=>document.getElementById('cbe-frame').contentWindow.location.href.includes('eroeffnung')&&document.getElementById('cbe-frame').contentDocument?.querySelector('[data-cbe-field="startTime"]'),null,{timeout:10000});
+await fe.locator('[data-cbe-field="startTime"]').click();await p.locator('#cbe-record-startTime').waitFor({timeout:3000});
+ok('events: reader page, a click on the time focuses it',await p.evaluate(()=>document.activeElement?.id)=='cbe-record-startTime'&&await p.locator('#cbe-record-startTime').inputValue()=='17:00');
+q('DELETE FROM tl_content WHERE id IN (50,51);DELETE FROM tl_article WHERE id IN (3,4);DELETE FROM tl_module WHERE id IN (2,3);DELETE FROM tl_calendar_events WHERE pid=1;DELETE FROM tl_calendar WHERE id=1;DELETE FROM tl_page WHERE id IN (6,7);UPDATE tl_page SET dateFormat=\'\',timeFormat=\'\',datimFormat=\'\' WHERE id=1');
+}
 // delete directly at the element: the button beside it, the bar above a text and the Delete key
 if(process.env.E2E_DB_CONTAINER){
 const q=x=>execFileSync('docker',['exec',process.env.E2E_DB_CONTAINER,'mariadb','-uroot','-pe2e','contao','-N','-e',x]).toString().trim();
